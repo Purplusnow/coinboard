@@ -1,0 +1,54 @@
+name: scan
+
+# 5분마다 업비트 캔들을 수집해 추천 스코어를 다시 계산한다.
+#
+# 왜 브라우저가 아니라 여기서 도는가:
+#   브라우저가 업비트 REST를 부르면 Origin 헤더 때문에 group=origin 쿼터로 강등되어
+#   초당 1회 수준에서 바로 429가 난다. Origin 없이 부르면 group=candles 로 잡혀
+#   600req/분 · 10req/초 를 받는다. 그래서 캔들 수집은 서버 측에서만 가능하다.
+#
+# 결과는 orphan `data` 브랜치에 force-push 한다. 매번 히스토리 없는 단일 커밋으로
+# 덮어쓰기 때문에 5분마다 커밋해도 저장소가 불어나지 않는다.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # GitHub Actions 최소 간격. 혼잡 시 수 분 밀릴 수 있다.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 의존성 없음 — 표준 라이브러리만 쓴다
+      - name: Scan
+        run: python tools/scan.py --out out/board.json
+
+      - name: Publish to data branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -s out/board.json
+          cd out
+          git init -q
+          git checkout -q -b data
+          git add board.json
+          git -c user.name="coinboard-bot" \
+              -c user.email="coinboard-bot@users.noreply.github.com" \
+              commit -q -m "board $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -q -f \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
