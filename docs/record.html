@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>공개 실적 장부 — COIN BOARD</title>
+<meta name="description" content="추천을 동결 기록하고 사후 채점한 전건 실적을 공개합니다. 손실도 그대로 남깁니다.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">▚</span>
+    <span class="brand-name">COIN<em>BOARD</em></span>
+    <span class="brand-sub">공개 실적 장부</span>
+  </div>
+  <div class="status">
+    <a class="nav-link" href="index.html">← 전광판</a>
+    <a class="nav-link" href="research.html">검증 로그</a>
+  </div>
+</header>
+
+<main class="doc">
+
+<h1>추천을 <em>동결</em>하고 전건 채점합니다</h1>
+<p class="lede">
+  매일 09:10 KST에 각 규칙의 보유 종목과 진입가를 기록하고, 1일·7일 뒤에 채점합니다.
+  <strong>기록은 수정하거나 지우지 않습니다.</strong> 성적이 나쁜 규칙도 죽이지 않고 계속 굴립니다.
+  잘 된 것만 남기면 실적표가 아니라 광고가 되기 때문입니다.
+</p>
+
+<div class="callout" id="status">장부를 불러오는 중…</div>
+
+<h2>무결성 규약</h2>
+<ul class="meth">
+  <li><b>동결</b> — 기록은 <code>journal</code> 브랜치에 append-only로 커밋합니다. force-push하지 않으므로 커밋 해시와 시각이 위변조 증거가 됩니다.</li>
+  <li><b>전건</b> — 모든 규칙, 모든 회차를 남깁니다. 체리피킹이 구조적으로 불가능합니다.</li>
+  <li><b>사전</b> — 진입가·수수료(왕복 0.2%)·지평을 코드에 미리 박아두고 사후에 바꾸지 않습니다.</li>
+  <li><b>재현</b> — 랜덤 기준선의 시드는 날짜 해시로 결정론적으로 만듭니다. 뽑고 나서 고를 수 없습니다.</li>
+  <li><b>기준선</b> — <b>랜덤 12종목</b>과 <b>비트코인 보유</b>를 같이 굴립니다. 이 둘을 못 이기면 아무 의미가 없습니다.</li>
+</ul>
+
+<div class="callout warn-box">
+  <b>이 장부를 보고 규칙을 고치지 않습니다.</b> 실적을 보면서 튜닝하는 순간 이 기록은
+  out-of-sample이 아니게 되고, 장부의 유일한 가치가 사라집니다. 연구는 과거 데이터로만 하고,
+  새 규칙은 <b>투입 시각을 기록해 추가</b>할 뿐 기존 규칙을 수정·삭제하지 않습니다.
+</div>
+
+<h2>성적 <span class="note" id="horizon-note">(7일 지평)</span></h2>
+<div class="tbl-wrap">
+  <table class="tbl" id="tbl">
+    <thead><tr>
+      <th>규칙</th><th>회차</th><th>평균 수익</th><th>승률</th>
+      <th>누적</th><th>MDD</th><th>BTC 대비 평균</th><th>BTC 대비 승률</th>
+    </tr></thead>
+    <tbody><tr><td colspan="8" class="note">로딩 중…</td></tr></tbody>
+  </table>
+</div>
+<p class="note" id="fee-note"></p>
+
+<h2>왜 손실이어도 계속 기록하나</h2>
+<p>
+  <a href="research.html">2.6년 백테스트</a>에서 알트 팩터 매매는 전부 파괴적이었습니다
+  (저변동 −63.7%, 급등추종 −93.3%, 전 종목 −77.2%). 같은 기간 비트코인 보유는 +54.1%였습니다.
+  그래서 이 장부의 목적은 <b>"우리 신호가 맞다"를 증명하는 것이 아닙니다.</b>
+</p>
+<p>
+  목적은 <b>실제로 어떻게 되는지를 위변조 불가능하게 남기는 것</b>입니다.
+  신호를 파는 곳은 많아도 전건 실적을, 그것도 랜덤·BTC 기준선과 나란히 공개하는 곳은 없습니다.
+  결과가 나쁘게 나오면 그 기록이 곧 <b>"이런 매매는 하지 마라"는 증거</b>가 됩니다.
+</p>
+
+<h2>읽을 때 주의할 것</h2>
+<ul class="meth">
+  <li><b>표본이 쌓이는 데 시간이 걸립니다.</b> 7일 지평 비중첩 표본은 1년에 52개뿐입니다. 몇 주치 성적으로는 어떤 결론도 낼 수 없습니다.</li>
+  <li>수수료는 왕복 0.2%(업비트 현물 0.05%×2 + 슬리피지 여유)를 매 회차 전액 교체 가정으로 뺍니다. 실제보다 보수적입니다.</li>
+  <li>진입가는 기록 시점 체결가입니다. 실제로는 호가 스프레드만큼 불리하게 체결됩니다.</li>
+  <li>보유 종목이 상장폐지되면 평균에서 제외하고 <code>missing</code>에 남깁니다. 그만큼 성적이 실제보다 좋게 보입니다.</li>
+  <li>1일 지평은 <a href="research.html">검정</a>에서 이미 수수료를 못 넘는 것으로 나왔습니다. 참고용입니다.</li>
+</ul>
+
+<p class="src" id="raw-link"></p>
+
+</main>
+
+<footer class="foot">
+  <p class="disclaimer">
+    정보 제공 목적의 기록이며 투자 자문·권유가 아닙니다. 과거 성적은 미래를 보장하지 않으며
+    매매 판단과 결과의 책임은 이용자 본인에게 있습니다.
+  </p>
+</footer>
+
+<script src="config.js"></script>
+<script src="record.js"></script>
+</body>
+</html>

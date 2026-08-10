@@ -1,0 +1,65 @@
+name: journal
+
+# 공개 실적 장부 — 매일 추천을 동결 기록하고 만기가 된 것을 채점한다.
+#
+# scan 워크플로와 결정적으로 다른 점: data 브랜치는 force-push로 덮어쓰지만
+# journal 브랜치는 절대 덮어쓰지 않는다. append-only 여야 기록이 증거가 된다.
+# 커밋 해시와 시각이 곧 위변조 방지 장치다.
+
+on:
+  schedule:
+    - cron: "10 0 * * *"    # 매일 09:10 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: journal            # 중복 실행이 겹쳐 같은 날 두 번 기록되면 안 된다
+  cancel-in-progress: false
+
+jobs:
+  journal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 규칙 판정에 board.json(변동성·분해)이 필요하다
+      - name: Scan
+        run: python tools/scan.py --out docs/data/board.json
+
+      - name: Checkout journal branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$URL" journal >/dev/null 2>&1; then
+            git clone --branch journal --single-branch "$URL" journal
+          else
+            mkdir journal && cd journal && git init -q && git checkout -q -b journal
+          fi
+
+      - name: Record and score
+        run: python tools/journal.py --dir journal --board docs/data/board.json
+
+      - name: Publish (append-only, never force)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd journal
+          git add entries.jsonl results.jsonl summary.json 2>/dev/null || git add -A
+          if git diff --cached --quiet; then
+            echo "변경 없음"; exit 0
+          fi
+          git -c user.name="coinboard-bot" \
+              -c user.email="coinboard-bot@users.noreply.github.com" \
+              commit -q -m "journal $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # force 없음 — 히스토리를 덮어쓰면 장부의 증거력이 사라진다
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" journal

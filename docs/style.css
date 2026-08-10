@@ -743,3 +743,26 @@ body {
 .dnums b.flat { color: var(--flat); }
 
 .doc h2.warn { color: var(--amber); }
+
+/* ── 실적 장부 ────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }        /* 표는 페이지가 아니라 자기 안에서 스크롤 */
+.tbl-wrap .tbl { min-width: 620px; }
+.tbl td.good { color: var(--mint); }
+.callout.warn-box {
+  border-color: #3a1c1c;
+  border-left-color: var(--up);
+  background: #170f10;
+  color: #d6bcbf;
+}
+.callout.warn-box b { color: var(--up); }
+.badge-base {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #07090e;
+  background: var(--txt-dim);
+  vertical-align: 1px;
+}
