@@ -530,7 +530,7 @@ def main() -> int:
     # 스테이블코인은 랭킹 최상단을 늘 독점하는데 정보가 없다.
     # (팩터 자체는 이들을 빼도 유지된다 — 7d IC +0.118 → +0.115)
     STABLE = {"USDT", "USDC", "USDE", "RLUSD", "USD1", "DAI", "TUSD", "FDUSD", "BUSD", "PYUSD"}
-    vol30 = {}
+    vol30, daily = {}, {}
     for f in feats:
         mk = f["market"]
         if mk.split("-")[1] in STABLE:
@@ -538,6 +538,7 @@ def main() -> int:
         try:
             d = fetch(f"/candles/days?market={mk}&count=31")
             closes = [c["trade_price"] for c in reversed(d)]
+            daily[mk] = closes
             rets = [math.log(closes[i] / closes[i - 1])
                     for i in range(1, len(closes)) if closes[i - 1] > 0]
             if len(rets) >= 20:
@@ -555,6 +556,33 @@ def main() -> int:
         lo = sorted(vol30.items(), key=lambda kv: kv[1]["vol"])[:3]
         desc = ", ".join("{} {}%".format(meta[m]["name"], v["vol"]) for m, v in lo)
         print("    변동성 {}종목 · 최저 {}".format(len(vol30), desc), file=sys.stderr)
+
+    # BTC 대비 상대 성과 — 원화 등락률만 보면 "BTC 대신 이 알트를 들 이유"가 안 보인다.
+    # 백테스트에서 알트 동일가중은 2.6년 -77%, BTC 보유는 +54%였다. 그 격차가 이 축의 근거다.
+    btcrel, breadth = {}, {}
+    btc = daily.get("KRW-BTC")
+    if btc and len(btc) >= 31:
+        def rel(closes, n):
+            if len(closes) <= n or len(btc) <= n or not closes[-1 - n] or not btc[-1 - n]:
+                return None, None
+            rc = closes[-1] / closes[-1 - n] - 1
+            rb = btc[-1] / btc[-1 - n] - 1
+            return round(rc * 100, 2), round(((1 + rc) / (1 + rb) - 1) * 100, 2)
+
+        for mk, closes in daily.items():
+            r7, x7 = rel(closes, 7)
+            r30, x30 = rel(closes, 30)
+            if x7 is None:
+                continue
+            btcrel[mk] = {"r7": r7, "rel7": x7, "r30": r30, "rel30": x30}
+
+        for k, tag in (("rel7", "7d"), ("rel30", "30d")):
+            vals = [v[k] for v in btcrel.values() if v.get(k) is not None and v is not btcrel.get("KRW-BTC")]
+            if vals:
+                breadth[tag] = {"beat": sum(1 for x in vals if x > 0), "total": len(vals)}
+        b7 = breadth.get("7d", {})
+        print("    BTC 대비 {}종목 · 7일간 BTC를 이긴 코인 {}/{}".format(
+            len(btcrel), b7.get("beat", 0), b7.get("total", 0)), file=sys.stderr)
 
     # 크로스 거래소 분해 (환율은 업비트 KRW-USDT 봉에서 직접)
     fx = {}
@@ -614,10 +642,22 @@ def main() -> int:
         "fx": fx,
         "cross": cross,
         "vol30": vol30,
+        "btcrel": btcrel,
+        "breadth": breadth,
         # 화면에 신호를 올릴 때는 측정된 근거를 함께 싣는다
         # 측정 기준은 '업비트 원화 수익률'이다. 바이낸스 USDT 기준으로 재면
         # 7일 IC가 +0.118로 더 좋게 나오지만, 국내 사용자가 실제로 얻는 수익률이 아니다.
         "evidence": {
+            # 저변동성 규칙을 실제 포트폴리오로 돌린 결과. IC가 유의해도 수익은 다른 문제다.
+            "portfolio": {
+                "period": "2023-11-15 ~ 2026-08-10", "years": 2.6, "rebal": "7일",
+                "fee": 0.2,
+                "lowvol": {"cum": -63.7, "cagr": -31.9, "mdd": -79.5},
+                "highvol": {"cum": -93.3, "cagr": -64.0, "mdd": -95.8},
+                "equal": {"cum": -77.2, "cagr": -42.8, "mdd": -87.6},
+                "btc": {"cum": 54.1, "cagr": 17.8},
+                "excess_weekly": 0.215, "excess_t": 1.07,
+            },
             "vol30": {
                 "ic_1d": 0.0718, "ic_7d": 0.0874,
                 "t_1d": 8.34, "t_7d": 3.98,

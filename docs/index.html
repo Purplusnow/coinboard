@@ -36,11 +36,12 @@
 <main class="board">
   <div class="board-head">
     <div class="board-title">
-      <h1 id="view-title">국내 단독 움직임</h1>
+      <h1 id="view-title">BTC 대비</h1>
       <span class="board-meta" id="board-meta">로딩 중…</span>
     </div>
     <nav class="tabs" id="tabs" role="tablist">
-      <button class="tab is-on" data-view="korea" role="tab">국내 단독</button>
+      <button class="tab is-on" data-view="btc" role="tab">BTC 대비</button>
+      <button class="tab" data-view="korea" role="tab">국내 단독</button>
       <button class="tab" data-view="global" role="tab">글로벌 동반</button>
       <button class="tab" data-view="lowvol" role="tab">저변동성 ★</button>
       <button class="tab" data-view="gainers" role="tab">실시간 급등</button>
@@ -59,15 +60,15 @@
     <span class="c-rank">#</span>
     <span class="c-name">종목</span>
     <span class="c-price">현재가</span>
-    <span class="c-chg">4H</span>
-    <span class="c-score">글로벌 / 국내 분해</span>
+    <span class="c-chg">BTC대비 4H</span>
+    <span class="c-score">BTC 대비 7일 / 30일</span>
   </div>
 
   <div class="rows" id="rows">
     <div class="skeleton">데이터를 불러오는 중…</div>
   </div>
 
-  <p class="legend">
+  <p class="legend" id="legend">
     <span class="key"><i class="sw g"></i>글로벌 성분 — 바이낸스에서도 같이 움직인 몫</span>
     <span class="key"><i class="sw k"></i>국내 성분 — 업비트에서만 추가로 움직인 몫</span>
   </p>

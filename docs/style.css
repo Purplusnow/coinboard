@@ -698,8 +698,16 @@ body {
 
   .board { padding: 16px 10px 20px; }
   .board-head { align-items: stretch; }
-  .tabs { width: 100%; }
-  .tab { flex: 1; text-align: center; padding: 8px 6px; }
+  /* 탭이 늘어나면 flex:1로는 최소 콘텐츠 폭 아래로 안 줄어 페이지가 넘친다.
+     페이지 대신 탭 스트립만 가로 스크롤시킨다. */
+  .tabs {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; text-align: center; padding: 8px 11px; }
 
   /* 스코어 컬럼은 이름 아래로 내린다 */
   .col-head, .row {
@@ -726,3 +734,12 @@ body {
   .row.tick-up::before, .row.tick-down::before { animation: none; opacity: 0; }
   .conn .dot { animation: none !important; }
 }
+
+/* BTC 대비 막대 — 0을 기준으로 좌우, 상승=빨강/하락=파랑 */
+.dbar > .sr.up   { background: var(--up);   box-shadow: 0 0 8px var(--up-glow); }
+.dbar > .sr.down { background: var(--down); box-shadow: 0 0 8px var(--down-glow); }
+.dnums b.up   { color: var(--up); }
+.dnums b.down { color: var(--down); }
+.dnums b.flat { color: var(--flat); }
+
+.doc h2.warn { color: var(--amber); }

@@ -31,6 +31,7 @@
   const MARQUEE_COUNT = 40;
 
   const VIEWS = {
+    btc:      { title: "BTC 대비", decomp: false, btc: true },
     korea:    { title: "국내 단독 움직임", decomp: true },
     global:   { title: "글로벌 동반 움직임", decomp: true },
     lowvol:   { title: "저변동성", decomp: false, vol: true },
@@ -42,12 +43,14 @@
     board: null,
     names: {},
     vol30: {},           // market -> { vol, pctile }
+    btcrel: {},          // market -> { r7, rel7, r30, rel30 }
+    breadth: {},         // BTC를 이긴 코인 수
     evidence: null,      // 화면에 올린 신호의 측정 근거
     base: new Map(),     // market -> { px4h, px24h, binance }
     globalChg: new Map(),// market -> 바이낸스 4h 변동(%)
     fxChg4h: 0,
     live: new Map(),
-    view: "korea",
+    view: "btc",
     subscribed: [],
     rows: new Map(),
     lastResort: 0,
@@ -106,6 +109,28 @@
     return { up, global, korea: up - global };
   }
 
+  // BTC 대비 4시간 상대 성과 — 원화로 올라도 BTC가 더 올랐으면 진 것이다.
+  // 백테스트에서 알트 동일가중 2.6년 -77% vs BTC +54%였던 게 이 축의 근거다.
+  function btcRel4h(mk) {
+    if (mk === "KRW-BTC") return 0;
+    const b = state.base.get(mk), bt = state.base.get("KRW-BTC");
+    const lv = state.live.get(mk), lb = state.live.get("KRW-BTC");
+    if (!b || !b.px4h || !bt || !bt.px4h || !lv || !lb) return null;
+    const rc = lv.price / b.px4h - 1;
+    const rb = lb.price / bt.px4h - 1;
+    return ((1 + rc) / (1 + rb) - 1) * 100;
+  }
+
+  // 현재 뷰에서 등락 컬럼에 무엇을 띄울지. BTC 뷰는 원화 등락이 아니라
+  // 'BTC 대비'가 의미 있는 숫자다.
+  function shownChange(mk, live) {
+    if (VIEWS[state.view].btc) {
+      const r = btcRel4h(mk);
+      if (r != null) return r;
+    }
+    return live ? live.chg : 0;
+  }
+
   function verdict(d) {
     if (!d) return null;
     const { up, global: g, korea: k } = d;
@@ -144,6 +169,8 @@
       if (b.names) state.names = b.names;
 
       state.vol30 = b.vol30 || {};
+      state.btcrel = b.btcrel || {};
+      state.breadth = b.breadth || {};
       state.evidence = b.evidence || null;
       if (b.fx && b.fx.now && b.fx.h4) {
         state.fxChg4h = (b.fx.now / b.fx.h4 - 1) * 100;
@@ -371,7 +398,7 @@
 
     // 같은 d로 등락률과 분해를 함께 갱신해야 항등식이 화면에서도 맞는다
     const d = VIEWS[state.view].decomp ? decompose(row.market) : null;
-    const shown = d ? d.up : live.chg;
+    const shown = d ? d.up : shownChange(row.market, live);
     row.price.classList.toggle("up", shown > 0);
     row.price.classList.toggle("down", shown < 0);
     row.chg.textContent = fmtPct(shown);
@@ -437,6 +464,26 @@
   function renderScoreCell(row) {
     if (VIEWS[state.view].decomp) {
       paintDecomp(row, decompose(row.market));
+    } else if (VIEWS[state.view].btc) {
+      const r = state.btcrel[row.market];
+      if (!r) {
+        row.score.innerHTML = `<span class="live-note">일봉 데이터 없음</span>`;
+        row.built = "none";
+        return;
+      }
+      const s = state.barScale || 20;
+      const pos = (v) => Math.max(0, Math.min(100, 50 + (v / s) * 50));
+      const end = pos(r.rel7);
+      const l = Math.min(50, end), w = Math.abs(end - 50);
+      row.score.innerHTML = `
+        <span class="score-line">
+          <span class="dbar"><i class="axis"></i>
+            <i class="sr ${r.rel7 > 0 ? "up" : "down"}" style="left:${l}%;width:${w}%"></i></span>
+          <span class="dnums">7일 <b class="${dirClass(r.rel7)}">${fmtPct(r.rel7)}</b>
+            <span class="plus">·</span> 30일
+            <b class="${dirClass(r.rel30)}">${r.rel30 == null ? "-" : fmtPct(r.rel30)}</b></span>
+        </span>`;
+      row.built = "btc";
     } else if (VIEWS[state.view].vol) {
       const v = state.vol30[row.market];
       row.score.innerHTML = v
@@ -474,6 +521,14 @@
       else arr.sort((a, b) => dom(a.d) - dom(b.d));
       return arr.slice(0, TOP_ROWS).map((x) => x.mk);
     }
+    if (view === "btc") {
+      // 순위는 7일 상대성과(안정적)로, 표시되는 등락은 실시간 4시간 상대성과로.
+      return Object.entries(state.btcrel)
+        .filter(([mk]) => (state.live.get(mk) || {}).turnover >= MIN_TURNOVER_SUB)
+        .sort((a, b) => b[1].rel7 - a[1].rel7)
+        .slice(0, TOP_ROWS)
+        .map(([mk]) => mk);
+    }
     if (view === "lowvol") {
       return Object.entries(state.vol30)
         .filter(([mk]) => (state.live.get(mk) || {}).turnover >= MIN_TURNOVER_SUB)
@@ -508,6 +563,12 @@
         if (d) scale = Math.max(scale, Math.abs(d.up), Math.abs(d.global));
       }
       scale = Math.ceil(scale * 1.1);
+    } else if (VIEWS[state.view].btc) {
+      for (const mk of list) {
+        const r = state.btcrel[mk];
+        if (r) scale = Math.max(scale, Math.abs(r.rel7));
+      }
+      scale = Math.ceil(scale * 1.1);
     }
     state.barScale = scale;
 
@@ -529,7 +590,7 @@
       }
       if (live) {
         const d = VIEWS[state.view].decomp ? decompose(mk) : null;
-        const shown = d ? d.up : live.chg;
+        const shown = d ? d.up : shownChange(mk, live);
         row.price.classList.toggle("up", shown > 0);
         row.price.classList.toggle("down", shown < 0);
         row.chg.textContent = fmtPct(shown);
@@ -605,6 +666,24 @@
         <span class="ev">이건 예측이 아니라 항등식에 의한 분해입니다.</span>`;
       return;
     }
+    if (VIEWS[state.view].btc) {
+      el.style.display = "";
+      const b7 = state.breadth["7d"] || {}, b30 = state.breadth["30d"] || {};
+      const e = state.evidence && state.evidence.portfolio;
+      const pct = (x) => (x && x.total ? Math.round(x.beat / x.total * 100) : null);
+      el.innerHTML = `원화 등락률만 보면 <b>"BTC 대신 이 알트를 들 이유가 있나"</b>가 안 보입니다.
+        원화로 +5% 올라도 BTC가 +8% 올랐으면 진 것입니다.
+        ${b7.total ? `지금 <b>7일간 BTC를 이긴 코인 ${b7.beat}/${b7.total}개(${pct(b7)}%)</b>,
+        30일 기준 <b>${b30.beat}/${b30.total}개(${pct(b30)}%)</b>입니다.` : ""}
+        ${e ? `<span class="ev">근거 — ${e.period}(${e.years}년) 백테스트:
+        알트 전 종목 동일가중 <b class="down">${e.equal.cum}%</b>,
+        저변동 하위 20% <b class="down">${e.lowvol.cum}%</b>,
+        고변동 상위 20% <b class="down">${e.highvol.cum}%</b> ·
+        <b class="up">비트코인 보유 +${e.btc.cum}%</b>.
+        알트를 고르는 것보다 고르지 않는 편이 나았습니다.
+        <a href="research.html">검정 상세</a></span>` : ""}`;
+      return;
+    }
     if (VIEWS[state.view].vol) {
       el.style.display = "";
       const e = state.evidence && state.evidence.vol30;
@@ -624,11 +703,16 @@
     state.view = view;
     for (const b of $("tabs").children) b.classList.toggle("is-on", b.dataset.view === view);
     $("view-title").textContent = VIEWS[view].title;
+    // 글로벌/국내 범례는 분해 뷰에서만 의미가 있다
+    const lg = $("legend");
+    if (lg) lg.style.display = VIEWS[view].decomp ? "" : "none";
     renderExplain();
     $("col-head").querySelector(".c-score").textContent =
       VIEWS[view].decomp ? "글로벌 / 국내 분해"
-      : VIEWS[view].vol ? "30일 실현변동성" : "거래대금";
-    $("col-head").querySelector(".c-chg").textContent = VIEWS[view].decomp ? "4H" : "24H";
+      : VIEWS[view].vol ? "30일 실현변동성"
+      : VIEWS[view].btc ? "BTC 대비 7일 / 30일" : "거래대금";
+    $("col-head").querySelector(".c-chg").textContent =
+      VIEWS[view].decomp ? "4H" : VIEWS[view].btc ? "BTC대비 4H" : "24H";
     $("rows").textContent = "";
     state.rows.clear();
     state.lastResort = Date.now();
@@ -654,6 +738,8 @@
     if (!ok) setConn("down", "시세 연결 실패");
 
     await loadGlobal();
+    const lg0 = $("legend");
+    if (lg0) lg0.style.display = VIEWS[state.view].decomp ? "" : "none";
     renderExplain();
     renderTopMarquee();
     renderWatchMarquee();
