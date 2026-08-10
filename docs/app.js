@@ -339,8 +339,11 @@
   }
 
   function scheduleReconnect() {
-    setConn("down", "재연결 대기");
-    const wait = Math.min(30_000, 1000 * Math.pow(2, retry++));
+    // 업비트는 WS 연결 자체에 한도가 있어(초당 5회·분당 100회) 실패 시 빠르게
+    // 재시도하면 429를 스스로 악화시킨다. 시작 간격을 늘리고 지터를 섞는다.
+    const base = Math.min(60_000, 2000 * Math.pow(2, retry++));
+    const wait = base * (0.7 + Math.random() * 0.6);
+    setConn("down", `재연결 ${Math.round(wait / 1000)}초 후`);
     setTimeout(() => {
       if (document.hidden) return setConn("down", "일시중지");
       connect();
