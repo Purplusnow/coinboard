@@ -284,7 +284,11 @@ def score_universe(feats: list[dict]) -> None:
 # ============================================================================
 # 크로스 거래소 분해 — 이 사이트의 유일한 차별점
 # ============================================================================
-BINANCE = "https://api.binance.com/api/v3"
+# GitHub Actions 러너는 미국 IP라 api.binance.com이 HTTP 451(Unavailable For Legal
+# Reasons)로 막힌다. data-api.binance.vision은 바이낸스 공개 데이터 미러라 통과한다.
+# 그래도 여기서 실패할 수 있으므로 브라우저가 바이낸스를 직접 부르는 경로가 본선이고,
+# 이 스냅샷은 보조다.
+BINANCE = "https://data-api.binance.vision/api/v3"
 MAX_SANE_KIMP = 5.0   # |김프|가 이보다 크면 티커만 같고 다른 토큰이다 (예: DATA)
 
 
@@ -641,6 +645,10 @@ def main() -> int:
         # 국내/글로벌 성분을 거의 실시간으로 다시 계산할 수 있게 한다.
         "fx": fx,
         "cross": cross,
+        # 업비트만으로 만들 수 있는 기준가. 바이낸스가 막혀 cross가 비어도
+        # 브라우저가 이것 + 바이낸스 직접 호출로 분해를 복원할 수 있다.
+        "base": {f["market"]: {"px4h": f.get("px_4h"), "px24h": f.get("px_24h")}
+                 for f in feats if f.get("px_4h")},
         "vol30": vol30,
         "btcrel": btcrel,
         "breadth": breadth,

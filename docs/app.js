@@ -20,7 +20,8 @@
   const DATA_URL = window.BOARD_DATA_URL || "data/board.json";
   const WS_URL = "wss://api.upbit.com/websocket/v1";
   const SNAPSHOT_URL = "https://api.upbit.com/v1/ticker/all?quote_currencies=KRW";
-  const BINANCE_URL = "https://api.binance.com/api/v3/ticker";
+  const BINANCE_BASE = "https://api.binance.com/api/v3";
+  const BINANCE_URL = BINANCE_BASE + "/ticker";
 
   const BOARD_REFRESH_MS = 60_000;
   const BINANCE_REFRESH_MS = 60_000;
@@ -175,13 +176,14 @@
       if (b.fx && b.fx.now && b.fx.h4) {
         state.fxChg4h = (b.fx.now / b.fx.h4 - 1) * 100;
       }
-      // 기준가는 items(상위)와 cross(전체) 양쪽에서 모은다
+      // 기준가는 base(업비트만으로 생성, 항상 존재)에서 먼저 채우고,
+      // cross(스캔 시점 바이낸스 스냅샷, 러너가 451로 막히면 비어 있음)로 보강한다.
+      for (const [mk, v] of Object.entries(b.base || {})) {
+        if (v && v.px4h) state.base.set(mk, { px4h: v.px4h, px24h: v.px24h });
+      }
       for (const it of b.items || []) {
-        if (it.px_4h) {
-          state.base.set(it.market, {
-            px4h: it.px_4h, px24h: it.px_24h,
-            binance: it.cross && it.cross.binance,
-          });
+        if (it.px_4h && !state.base.has(it.market)) {
+          state.base.set(it.market, { px4h: it.px_4h, px24h: it.px_24h });
         }
       }
       for (const [mk, c] of Object.entries(b.cross || {})) {
@@ -198,7 +200,7 @@
       }
 
       $("board-meta").textContent =
-        `${Object.keys(b.cross || {}).length}종목 분해 · 스캔 ${b.generated_at_kst || "-"} KST`;
+        `${state.base.size}종목 · 스캔 ${b.generated_at_kst || "-"} KST`;
       $("foot-scan").textContent = `${b.generated_at_kst || "-"} KST`;
 
       renderWatchMarquee();
@@ -233,6 +235,40 @@
     } catch (e) {
       console.warn("스냅샷 실패:", e.message);
       return false;
+    }
+  }
+
+  // ── 바이낸스 대응 종목 매핑 (브라우저에서 직접) ─────────
+  // 스캐너는 GitHub Actions(미국 IP)에서 도는데 바이낸스가 451로 막는다.
+  // 그래서 어느 코인이 바이낸스에 있는지, 티커가 같아도 다른 토큰은 아닌지를
+  // 브라우저가 직접 확인한다. 사용자는 바이낸스에 접근 가능한 곳에서 보기 때문이다.
+  async function loadBinanceSymbols() {
+    try {
+      const res = await fetch(`${BINANCE_BASE}/ticker/price`);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const prices = new Map();
+      for (const x of await res.json()) prices.set(x.symbol, parseFloat(x.price));
+
+      const fxNow = state.board && state.board.fx && state.board.fx.now;
+      let matched = 0, collided = 0;
+      for (const [mk, b] of state.base) {
+        const sym = mk.split("-")[1];
+        if (sym === "USDT") continue;
+        const bp = prices.get(sym + "USDT");
+        if (!bp) continue;
+        // 티커가 같아도 다른 토큰인 경우가 있다(예: DATA에서 김프 +23,776% 관측).
+        // 김프가 상식 밖이면 매칭에서 제외한다.
+        const live = state.live.get(mk);
+        if (live && fxNow) {
+          const kimp = (live.price / (bp * fxNow) - 1) * 100;
+          if (Math.abs(kimp) > 5) { collided++; continue; }
+        }
+        b.binance = sym;
+        matched++;
+      }
+      console.info(`바이낸스 매칭 ${matched}종목 (티커충돌 제외 ${collided})`);
+    } catch (e) {
+      console.warn("바이낸스 심볼 목록 실패:", e.message);
     }
   }
 
@@ -737,6 +773,7 @@
     const ok = await loadSnapshot();
     if (!ok) setConn("down", "시세 연결 실패");
 
+    await loadBinanceSymbols();
     await loadGlobal();
     const lg0 = $("legend");
     if (lg0) lg0.style.display = VIEWS[state.view].decomp ? "" : "none";

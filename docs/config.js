@@ -10,5 +10,5 @@
  * raw.githubusercontent.com 은 CORS가 열려 있고 max-age=300 으로 캐시된다.
  */
 window.BOARD_DATA_URL =
-  // "https://raw.githubusercontent.com/<OWNER>/<REPO>/data/board.json";
-  "data/board.json";
+  "https://raw.githubusercontent.com/Purplusnow/coinboard/data/board.json";
+// 실패하면 저장소에 커밋된 docs/data/board.json 으로 자동 폴백한다(app.js fetchBoardJson).
