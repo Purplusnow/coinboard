@@ -1,6 +1,8 @@
 # COIN BOARD
 
-최종 업데이트: 2026-08-10
+최종 업데이트: 2026-08-11
+
+**🔗 https://purplusnow.github.io/coinboard/**
 
 업비트의 가격 변동을 **글로벌 성분과 국내 성분으로 분해**해 실시간 전광판으로 보여주는
 GitHub Pages 정적 사이트. 서버 없음, API 키 없음, 비용 0원.
