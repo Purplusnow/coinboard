@@ -31,6 +31,8 @@
     $("status").innerHTML = msg;
     $("tbl").querySelector("tbody").innerHTML =
       `<tr><td colspan="8" class="note">아직 채점된 회차가 없습니다.</td></tr>`;
+    $("tbl-trade").querySelector("tbody").innerHTML =
+      `<tr><td colspan="10" class="note">아직 종결된 매매가 없습니다.</td></tr>`;
   }
 
   function render(s) {
@@ -84,6 +86,7 @@
     }).join("");
 
     $("tbl").querySelector("tbody").innerHTML = rows;
+    renderTrades(s, order);
     $("fee-note").textContent =
       `수익률은 왕복 수수료 ${s.fee}%p를 뺀 순수익 기준입니다. ` +
       `누적은 지평(${H}일)만큼 건너뛴 비중첩 회차만 곱해 계산합니다.`;
@@ -91,6 +94,42 @@
       $("raw-link").innerHTML =
         `원본 장부(수정 불가 기록) · <a href="${BRANCH_URL}">${esc(OWNER)}/${esc(REPO)} @ journal</a>`;
     }
+  }
+
+  // 목표가/손절가 매매. 대표 지표는 승률이 아니라 기대값이다 —
+  // 목표가를 좁히고 손절가를 넓히면 승률은 얼마든지 만들 수 있기 때문이다.
+  function renderTrades(s, order) {
+    const tb = $("tbl-trade").querySelector("tbody");
+    const any = Object.values(s.rules || {}).some((r) => (r.trade?.n || 0) > 0);
+    if (!any) {
+      tb.innerHTML = `<tr><td colspan="10" class="note">
+        아직 종결된 매매가 없습니다. 목표가 또는 손절가에 닿거나 7일이 지나야 기록됩니다.
+        </td></tr>`;
+      return;
+    }
+    // 기대값 순으로 세운다. 승률 순으로 세우면 그 자체가 오해를 만든다.
+    const ord = [...order].sort((a, b) =>
+      ((s.rules[b].trade?.ev) ?? -1e9) - ((s.rules[a].trade?.ev) ?? -1e9));
+
+    tb.innerHTML = ord.map((rid) => {
+      const r = s.rules[rid], t = r.trade || {};
+      const base = rid === "random" || rid === "btc" || rid === "eqw";
+      const nm = `${esc(r.name)}${base ? ' <span class="badge-base">기준선</span>' : ""}`;
+      if (!t.n) return `<tr${base ? ' class="hl"' : ""}><td>${nm}</td>
+        <td colspan="9" class="note">종결된 매매 없음</td></tr>`;
+      return `<tr${base ? ' class="hl"' : ""}>
+        <td>${nm}</td>
+        <td>${t.n}</td>
+        <td>${t.win}%</td>
+        <td class="${cls(t.ev)}"><b>${fmt(t.ev)}%</b></td>
+        <td class="good">${fmt(t.avg_win)}%</td>
+        <td class="bad">${fmt(t.avg_loss)}%</td>
+        <td>${t.rr == null ? "—" : t.rr}</td>
+        <td class="note">${t.tp} / ${t.sl} / ${t.expire}</td>
+        <td class="${cls(t.cum)}">${fmt(t.cum, 1)}%</td>
+        <td class="note">${t.hours}h</td>
+      </tr>`;
+    }).join("");
   }
 
   async function boot() {
