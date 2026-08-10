@@ -23,6 +23,12 @@
   --amber-glow: rgba(255, 194, 61, .5);
   --mint: #2ee6a8;
 
+  /* 분해 전용 색 — 상승/하락(빨강·파랑)과 절대 겹치면 안 된다 */
+  --global: #22d3ee;
+  --global-dim: rgba(34, 211, 238, .18);
+  --korea: #fbbf24;
+  --korea-dim: rgba(251, 191, 36, .18);
+
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "D2Coding", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
           "Malgun Gothic", system-ui, sans-serif;
@@ -269,7 +275,7 @@ body {
 /* 컬럼 그리드 — 헤더와 행이 동일한 트랙을 쓴다 */
 .col-head, .row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 140px 92px minmax(0, 1.25fr);
+  grid-template-columns: 42px minmax(0, .85fr) 128px 82px minmax(0, 1.85fr);
   align-items: center;
   gap: 12px;
 }
@@ -460,6 +466,81 @@ body {
 }
 .tag.warn { background: #3a2412; color: var(--amber); border-color: #563618; }
 
+/* ── 분해 ─────────────────────────────────────────────── */
+.c-g { color: var(--global); }
+.c-k { color: var(--korea); }
+
+.nav-link {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--txt-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted #39445a;
+  padding-bottom: 1px;
+}
+.nav-link:hover { color: var(--amber); border-color: var(--amber); }
+
+.explain {
+  margin: 0 0 14px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--korea);
+  border-radius: 7px;
+  background: #0e131c;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--txt-dim);
+}
+.explain b { font-weight: 700; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 2px 0;
+  font-size: 11.5px;
+  color: var(--txt-faint);
+}
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw.g { background: var(--global); box-shadow: 0 0 8px var(--global-dim); }
+.sw.k { background: var(--korea); box-shadow: 0 0 8px var(--korea-dim); }
+
+/* 누적 막대: 중앙이 0, 글로벌 기여에 국내 기여를 이어 붙인다.
+   막대 끝점이 곧 업비트 총변동이 되도록 만든 것이 핵심이다. */
+.dbar {
+  position: relative;
+  flex: 0 0 132px;
+  height: 15px;
+  border-radius: 3px;
+  background: #131a26;
+  overflow: hidden;
+}
+.dbar > i { position: absolute; top: 3px; height: 9px; border-radius: 2px; }
+.dbar > .axis {
+  left: 50%; top: 0; width: 1px; height: 100%;
+  background: #2e3950; border-radius: 0;
+}
+.dbar > .sg { background: var(--global); box-shadow: 0 0 8px var(--global-dim); }
+.dbar > .sk { background: var(--korea); box-shadow: 0 0 8px var(--korea-dim); }
+
+.dnums {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dnums .plus { color: var(--txt-faint); }
+
+.tag.verdict { border-width: 1px; border-style: solid; }
+.tag.verdict.korea  { background: #33280c; color: var(--korea); border-color: #4d3c11; }
+.tag.verdict.global { background: #0b2c33; color: var(--global); border-color: #114049; }
+.tag.verdict.flat   { background: #1a2030; color: var(--txt-dim); border-color: #262f42; }
+
 /* 실시간 뷰에서는 스코어 대신 거래대금 표시 */
 .live-note {
   font-family: var(--mono);
@@ -468,6 +549,103 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .live-note b { color: var(--txt); font-weight: 600; }
+
+/* ── 문서 페이지 (검증 로그) ──────────────────────────── */
+.doc {
+  flex: 1;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 30px 18px 12px;
+  line-height: 1.75;
+}
+.doc h1 {
+  margin: 0 0 10px;
+  font-size: 25px;
+  letter-spacing: -.02em;
+}
+.doc h1 em { font-style: normal; color: var(--up); }
+.doc h2 {
+  margin: 34px 0 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 16px;
+  letter-spacing: -.01em;
+}
+.doc p { margin: 0 0 12px; font-size: 13.5px; color: #c2cbdb; }
+.lede { font-size: 14.5px !important; color: var(--txt-dim) !important; }
+.doc strong, .doc b { color: var(--txt); }
+
+.callout {
+  margin: 18px 0 8px;
+  padding: 14px 16px;
+  border: 1px solid #3a2c12;
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  background: #17130a;
+  font-size: 13.5px;
+  color: #d8cdb4;
+}
+.callout b { color: var(--amber); }
+
+.meth { margin: 0 0 12px; padding-left: 18px; }
+.meth li { margin-bottom: 7px; font-size: 13px; color: #b3bccd; }
+
+.note { font-family: var(--mono); font-size: 11.5px; color: var(--txt-faint) !important; }
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 14px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.tbl th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--txt-faint);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+.tbl td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  color: #c2cbdb;
+}
+.tbl tr.hl td { background: #101722; color: var(--txt); }
+.tbl td.bad { color: var(--up); }
+
+.verdict-line {
+  padding: 11px 14px;
+  border-radius: 7px;
+  font-size: 13px !important;
+}
+.verdict-line.reject {
+  background: #1a1013;
+  border-left: 3px solid var(--up);
+  color: #d7bfc3 !important;
+}
+
+.fml {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d1219;
+  font-family: var(--mono);
+  font-size: 12px !important;
+  line-height: 1.9;
+  overflow-x: auto;
+}
+
+@media (max-width: 760px) {
+  .doc { padding: 22px 14px 10px; }
+  .doc h1 { font-size: 21px; }
+  .tbl { font-size: 11.5px; }
+  .tbl th, .tbl td { padding: 7px 6px; }
+}
 
 /* ── 푸터 ─────────────────────────────────────────────── */
 .foot {

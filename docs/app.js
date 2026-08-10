@@ -1,12 +1,18 @@
-/* COIN BOARD — 업비트 실시간 전광판
+/* COIN BOARD — 업비트 × 바이낸스 실시간 분해 전광판
  *
- * 데이터 경로 두 갈래:
- *   1) board.json  — GitHub Actions가 5분마다 캔들·지표·스코어를 계산해 만든 추천 결과
- *   2) WebSocket   — 업비트 public 스트림. 인증 없음, 초 단위 체결가
+ * 이 사이트가 보여주는 것은 예측이 아니라 서술이다.
+ *   업비트 4시간 변동 = 글로벌 성분 + 국내 성분
+ *   글로벌 성분 = (1+바이낸스 4h 변동)(1+USDT/원 4h 변동) − 1
+ *   국내 성분   = 업비트 변동 − 글로벌 성분      (= 프리미엄의 변화)
  *
- * 브라우저에서 업비트 REST를 부를 때는 Origin 헤더 때문에 group=origin 쿼터로
- * 강등되어 사실상 1req/s에서 429가 난다. 그래서 REST는 최초 스냅샷 1회만 쓰고
- * 이후 갱신은 전부 WebSocket으로 받는다.
+ * 국내 성분에 예측력이 있는지는 직접 검정했고 기각됐다(research.html).
+ * 그래서 순위·점수로 "이걸 사라"는 신호를 만들지 않는다.
+ *
+ * 데이터 경로:
+ *   board.json      Actions가 5분마다 — 기준가(4h/24h 전), 이름, 환율, 분해 스냅샷
+ *   업비트 WebSocket 초 단위 체결가 (인증·CORS 제약 없음)
+ *   바이낸스 REST    60초마다 글로벌 4h 변동 (CORS 열려 있음)
+ * 업비트 REST는 브라우저에서 Origin 쿼터에 걸리므로 최초 스냅샷 1회만 쓴다.
  */
 (() => {
   "use strict";
@@ -14,72 +20,107 @@
   const DATA_URL = window.BOARD_DATA_URL || "data/board.json";
   const WS_URL = "wss://api.upbit.com/websocket/v1";
   const SNAPSHOT_URL = "https://api.upbit.com/v1/ticker/all?quote_currencies=KRW";
+  const BINANCE_URL = "https://api.binance.com/api/v3/ticker";
 
-  const BOARD_REFRESH_MS = 60_000;   // board.json 재확인 주기
-  const RESORT_MS = 2500;            // 실시간 뷰 재정렬 주기 (매 틱마다 하면 못 읽는다)
+  const BOARD_REFRESH_MS = 60_000;
+  const BINANCE_REFRESH_MS = 60_000;
+  const RESORT_MS = 4000;
   const MARQUEE_REFRESH_MS = 3000;
-  const MIN_TURNOVER_SUB = 100_000_000; // 구독 대상 최소 24h 거래대금 (1억)
+  const MIN_TURNOVER_SUB = 100_000_000;
   const TOP_ROWS = 12;
   const MARQUEE_COUNT = 40;
 
-  // ── 상태 ────────────────────────────────────────────────
+  const VIEWS = {
+    korea:    { title: "국내 단독 움직임", decomp: true },
+    global:   { title: "글로벌 동반 움직임", decomp: true },
+    gainers:  { title: "실시간 급등", decomp: false },
+    turnover: { title: "거래대금 상위", decomp: false },
+  };
+
   const state = {
     board: null,
-    names: {},          // market -> 한글명
-    live: new Map(),    // market -> { price, chg, turnover, ts }
-    view: "reco",
+    names: {},
+    base: new Map(),     // market -> { px4h, px24h, binance }
+    globalChg: new Map(),// market -> 바이낸스 4h 변동(%)
+    fxChg4h: 0,
+    live: new Map(),
+    view: "korea",
     subscribed: [],
-    rows: new Map(),    // market -> { el, els..., lastPrice, lastFlipAt }
+    rows: new Map(),
     lastResort: 0,
-    pending: new Set(), // rAF로 합쳐서 그릴 대상
+    pending: new Set(),
     rafQueued: false,
   };
 
   const $ = (id) => document.getElementById(id);
 
-  // ── 포맷터 ──────────────────────────────────────────────
-  function fmtPrice(p) {
-    if (p == null || !isFinite(p)) return "-";
-    if (p >= 100) return Math.round(p).toLocaleString("ko-KR");
-    if (p >= 1) return p.toFixed(2);
-    if (p >= 0.01) return p.toFixed(4);
-    return p.toFixed(6);
-  }
+  // ── 포맷 ────────────────────────────────────────────────
+  const fmtPrice = (p) =>
+    p == null || !isFinite(p) ? "-"
+    : p >= 100 ? Math.round(p).toLocaleString("ko-KR")
+    : p >= 1 ? p.toFixed(2)
+    : p >= 0.01 ? p.toFixed(4)
+    : p.toFixed(6);
 
-  function fmtPct(v) {
-    if (v == null || !isFinite(v)) return "-";
-    return (v > 0 ? "+" : "") + v.toFixed(2) + "%";
-  }
+  const fmtPct = (v) =>
+    v == null || !isFinite(v) ? "-" : (v > 0 ? "+" : "") + v.toFixed(2) + "%";
 
-  function fmtTurnover(v) {
-    if (!v) return "-";
-    if (v >= 1e12) return (v / 1e12).toFixed(2) + "조";
-    if (v >= 1e8) return Math.round(v / 1e8).toLocaleString("ko-KR") + "억";
-    if (v >= 1e4) return Math.round(v / 1e4).toLocaleString("ko-KR") + "만";
-    return Math.round(v).toLocaleString("ko-KR");
-  }
+  const fmtPp = (v) =>
+    v == null || !isFinite(v) ? "-" : (v > 0 ? "+" : "") + v.toFixed(2) + "%p";
+
+  const fmtTurnover = (v) =>
+    !v ? "-"
+    : v >= 1e12 ? (v / 1e12).toFixed(2) + "조"
+    : v >= 1e8 ? Math.round(v / 1e8).toLocaleString("ko-KR") + "억"
+    : Math.round(v / 1e4).toLocaleString("ko-KR") + "만";
 
   const dirClass = (v) => (v > 0 ? "up" : v < 0 ? "down" : "flat");
 
-  // ── 시계 ────────────────────────────────────────────────
   function tickClock() {
-    const kst = new Date(Date.now() + (new Date().getTimezoneOffset() * 60000) + 9 * 3600000);
+    const d = new Date();
+    const kst = new Date(d.getTime() + (d.getTimezoneOffset() * 60000) + 9 * 3600000);
     $("clock").textContent =
-      String(kst.getHours()).padStart(2, "0") + ":" +
-      String(kst.getMinutes()).padStart(2, "0") + ":" +
-      String(kst.getSeconds()).padStart(2, "0") + " KST";
+      [kst.getHours(), kst.getMinutes(), kst.getSeconds()]
+        .map((x) => String(x).padStart(2, "0")).join(":") + " KST";
   }
 
-  function setConn(stateName, label) {
-    const el = $("conn");
-    el.dataset.state = stateName;
+  function setConn(s, label) {
+    $("conn").dataset.state = s;
     $("conn-label").textContent = label;
+  }
+
+  // ── 분해 계산 ───────────────────────────────────────────
+  // 업비트 실시간가와 기준가(4h 전)로 업비트 수익률을 매 틱 다시 구하고,
+  // 글로벌 성분은 60초마다 갱신되는 바이낸스 값을 쓴다.
+  function decompose(mk) {
+    const b = state.base.get(mk);
+    const live = state.live.get(mk);
+    if (!b || !b.px4h || !live) return null;
+    const up = (live.price / b.px4h - 1) * 100;
+    const g = state.globalChg.get(mk);
+    if (g == null) return null;
+    const global = ((1 + g / 100) * (1 + state.fxChg4h / 100) - 1) * 100;
+    return { up, global, korea: up - global };
+  }
+
+  function verdict(d) {
+    if (!d) return null;
+    const { up, global: g, korea: k } = d;
+    if (Math.abs(up) < 0.7) return { text: "보합", kind: "flat" };
+    if (up > 0) {
+      if (k > 0 && g <= 0.3) return { text: "국내 단독 상승", kind: "korea" };
+      if (k > g) return { text: "국내 주도 상승", kind: "korea" };
+      if (Math.abs(k) < Math.max(0.5, Math.abs(g) * 0.3))
+        return { text: "글로벌 동반 상승", kind: "global" };
+      return { text: "글로벌 주도 상승", kind: "global" };
+    }
+    if (k < 0 && g >= -0.3) return { text: "국내 단독 하락", kind: "korea" };
+    if (k < g) return { text: "국내 주도 하락", kind: "korea" };
+    return { text: "글로벌 동반 하락", kind: "global" };
   }
 
   // ── board.json ──────────────────────────────────────────
   async function fetchBoardJson() {
-    // 5분 캐시를 우회하려는 게 아니라, CDN이 오래된 사본을 물고 있을 때
-    // 최소한 5분 버킷 단위로는 새 URL이 되게 한다.
     const bucket = Math.floor(Date.now() / 300_000);
     const urls = DATA_URL === "data/board.json" ? [DATA_URL] : [DATA_URL, "data/board.json"];
     let lastErr;
@@ -88,9 +129,7 @@
         const res = await fetch(`${u}?v=${bucket}`, { cache: "no-cache" });
         if (!res.ok) throw new Error("HTTP " + res.status);
         return await res.json();
-      } catch (e) {
-        lastErr = e;  // data 브랜치가 아직 없으면 저장소에 커밋된 사본으로 떨어진다
-      }
+      } catch (e) { lastErr = e; }
     }
     throw lastErr;
   }
@@ -101,23 +140,43 @@
       state.board = b;
       if (b.names) state.names = b.names;
 
+      if (b.fx && b.fx.now && b.fx.h4) {
+        state.fxChg4h = (b.fx.now / b.fx.h4 - 1) * 100;
+      }
+      // 기준가는 items(상위)와 cross(전체) 양쪽에서 모은다
+      for (const it of b.items || []) {
+        if (it.px_4h) {
+          state.base.set(it.market, {
+            px4h: it.px_4h, px24h: it.px_24h,
+            binance: it.cross && it.cross.binance,
+          });
+        }
+      }
+      for (const [mk, c] of Object.entries(b.cross || {})) {
+        const cur = state.base.get(mk) || {};
+        state.base.set(mk, { ...cur, binance: c.binance });
+        // 스캔 시점의 글로벌 값을 우선 채워두고, 바이낸스 호출이 오면 덮어쓴다
+        if (c["4h"] && !state.globalChg.has(mk)) {
+          state.globalChg.set(mk, c["4h"].global);
+        }
+      }
+
       $("board-meta").textContent =
-        `${b.universe_size}개 종목 분석 · 스캔 ${b.generated_at_kst || "-"} KST`;
-      $("foot-scan").textContent = `${b.generated_at_kst || "-"} KST 기준`;
+        `${Object.keys(b.cross || {}).length}종목 분해 · 스캔 ${b.generated_at_kst || "-"} KST`;
+      $("foot-scan").textContent = `${b.generated_at_kst || "-"} KST`;
 
       renderWatchMarquee();
-      if (state.view === "reco") renderRows(true);
+      renderRows(true);
     } catch (e) {
-      console.warn("board.json 로드 실패:", e.message);
+      console.warn("board.json 실패:", e.message);
       if (!state.board) {
-        $("board-meta").textContent =
-          "추천 데이터를 불러오지 못했습니다 — 실시간 시세만 표시합니다";
-        if (state.view === "reco") switchView("gainers");
+        $("board-meta").textContent = "분해 데이터를 불러오지 못했습니다 — 실시간 시세만 표시합니다";
+        if (VIEWS[state.view].decomp) switchView("gainers");
       }
     }
   }
 
-  // ── 최초 스냅샷 (REST 1회) ──────────────────────────────
+  // ── 업비트 최초 스냅샷 (REST 1회) ───────────────────────
   async function loadSnapshot() {
     try {
       const res = await fetch(SNAPSHOT_URL);
@@ -128,11 +187,8 @@
           price: t.trade_price,
           chg: (t.signed_change_rate || 0) * 100,
           turnover: t.acc_trade_price_24h || 0,
-          ts: t.timestamp || Date.now(),
         });
       }
-      // 구독 대상: 거래대금이 어느 정도 있는 종목만. 전 종목을 구독하면
-      // 모바일에서 의미 없는 트래픽이 늘고, 유동성 없는 코인은 어차피 안 움직인다.
       state.subscribed = arr
         .filter((t) => (t.acc_trade_price_24h || 0) >= MIN_TURNOVER_SUB)
         .sort((a, b) => b.acc_trade_price_24h - a.acc_trade_price_24h)
@@ -144,21 +200,39 @@
     }
   }
 
+  // ── 바이낸스 글로벌 4h 변동 (CORS 열려 있어 브라우저 직접 호출) ──
+  async function loadGlobal() {
+    const syms = [];
+    const map = new Map();
+    for (const [mk, b] of state.base) {
+      if (b.binance) {
+        const s = b.binance + "USDT";
+        syms.push(s);
+        map.set(s, mk);
+      }
+    }
+    if (!syms.length) return;
+    try {
+      const q = encodeURIComponent(JSON.stringify(syms));
+      const res = await fetch(`${BINANCE_URL}?symbols=${q}&windowSize=4h`);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      for (const x of await res.json()) {
+        const mk = map.get(x.symbol);
+        if (mk) state.globalChg.set(mk, parseFloat(x.priceChangePercent));
+      }
+      if (VIEWS[state.view].decomp) renderRows(false);
+    } catch (e) {
+      console.warn("바이낸스 실패:", e.message);
+    }
+  }
+
   // ── WebSocket ───────────────────────────────────────────
-  let ws = null;
-  let retry = 0;
-  let pingTimer = null;
+  let ws = null, retry = 0, pingTimer = null;
 
   function connect() {
     if (!state.subscribed.length) return;
     setConn("connecting", "연결 중");
-
-    try {
-      ws = new WebSocket(WS_URL);
-    } catch (e) {
-      scheduleReconnect();
-      return;
-    }
+    try { ws = new WebSocket(WS_URL); } catch { return scheduleReconnect(); }
     ws.binaryType = "arraybuffer";
 
     ws.onopen = () => {
@@ -176,27 +250,19 @@
     };
 
     ws.onmessage = (ev) => {
-      let txt;
-      if (typeof ev.data === "string") txt = ev.data;
-      else txt = new TextDecoder("utf-8").decode(ev.data);
-
+      const txt = typeof ev.data === "string" ? ev.data : new TextDecoder("utf-8").decode(ev.data);
       let d;
       try { d = JSON.parse(txt); } catch { return; }
-      if (!d || !d.code) return; // PONG 응답 등은 무시
-
+      if (!d || !d.code) return;
       state.live.set(d.code, {
         price: d.trade_price,
         chg: (d.signed_change_rate || 0) * 100,
         turnover: d.acc_trade_price_24h || 0,
-        ts: d.timestamp || Date.now(),
       });
       queuePaint(d.code);
     };
 
-    ws.onclose = () => {
-      clearInterval(pingTimer);
-      scheduleReconnect();
-    };
+    ws.onclose = () => { clearInterval(pingTimer); scheduleReconnect(); };
     ws.onerror = () => { try { ws.close(); } catch {} };
   }
 
@@ -209,11 +275,8 @@
     }, wait);
   }
 
-  // ── 페인트 스케줄러 ─────────────────────────────────────
-  // WS는 초당 수십 건이 들어온다. 매 건마다 DOM을 만지면 애니메이션이 뭉개지므로
-  // rAF 한 프레임에 모아서 처리한다.
-  function queuePaint(market) {
-    state.pending.add(market);
+  function queuePaint(mk) {
+    state.pending.add(mk);
     if (state.rafQueued) return;
     state.rafQueued = true;
     requestAnimationFrame(flushPaint);
@@ -223,20 +286,17 @@
     state.rafQueued = false;
     const marks = state.pending;
     state.pending = new Set();
-
     for (const mk of marks) {
       const row = state.rows.get(mk);
-      if (row) updateRow(row, state.live.get(mk));
+      if (row) updateRow(row);
     }
-
-    // 실시간 뷰는 주기적으로만 순위를 다시 매긴다
-    if (state.view !== "reco" && Date.now() - state.lastResort > RESORT_MS) {
+    if (Date.now() - state.lastResort > RESORT_MS) {
       state.lastResort = Date.now();
       renderRows(false);
     }
   }
 
-  // ── 스플릿플랩 가격 ─────────────────────────────────────
+  // ── 스플릿플랩 ──────────────────────────────────────────
   function buildFlaps(container, str) {
     container.textContent = "";
     const frag = document.createDocumentFragment();
@@ -251,16 +311,16 @@
 
   function setFlaps(container, str, animate) {
     const flaps = container.children;
-    if (flaps.length !== str.length) { buildFlaps(container, str); return; }
+    if (flaps.length !== str.length) return buildFlaps(container, str);
     for (let i = 0; i < str.length; i++) {
       const el = flaps[i];
-      const ch = str[i];
-      if (el.textContent === ch) continue;
-      if (!animate) { el.textContent = ch; continue; }
+      if (el.textContent === str[i]) continue;
+      if (!animate) { el.textContent = str[i]; continue; }
       el.classList.remove("flip");
-      void el.offsetWidth;          // 리플로우로 애니메이션 재시작
+      void el.offsetWidth;
       el.classList.add("flip");
-      setTimeout(() => { el.textContent = ch; }, 130); // 뒤집힌 순간에 교체
+      const ch = str[i];
+      setTimeout(() => { el.textContent = ch; }, 130);
     }
   }
 
@@ -275,38 +335,39 @@
       <span class="c-chg"></span>
       <span class="c-score"></span>`;
     const row = {
-      market: mk,
-      el,
+      market: mk, el,
       rank: el.querySelector(".c-rank"),
       ko: el.querySelector(".n-ko"),
       sym: el.querySelector(".n-sym"),
       price: el.querySelector(".c-price"),
       chg: el.querySelector(".c-chg"),
       score: el.querySelector(".c-score"),
-      lastPrice: null,
-      lastFlipAt: 0,
+      lastPrice: null, lastFlipAt: 0,
     };
     state.rows.set(mk, row);
     return row;
   }
 
-  function updateRow(row, live) {
+  function updateRow(row) {
+    const live = state.live.get(row.market);
     if (!live) return;
     const now = Date.now();
     const prev = row.lastPrice;
     const changed = prev != null && live.price !== prev;
-
-    // 초당 여러 번 뒤집히면 읽을 수가 없다. 행당 최소 220ms 간격.
     const animate = changed && now - row.lastFlipAt > 220;
+
     setFlaps(row.price, fmtPrice(live.price), animate);
     if (animate) row.lastFlipAt = now;
     row.lastPrice = live.price;
 
-    row.price.classList.toggle("up", live.chg > 0);
-    row.price.classList.toggle("down", live.chg < 0);
-
-    row.chg.textContent = fmtPct(live.chg);
-    row.chg.className = "c-chg " + dirClass(live.chg);
+    // 같은 d로 등락률과 분해를 함께 갱신해야 항등식이 화면에서도 맞는다
+    const d = VIEWS[state.view].decomp ? decompose(row.market) : null;
+    const shown = d ? d.up : live.chg;
+    row.price.classList.toggle("up", shown > 0);
+    row.price.classList.toggle("down", shown < 0);
+    row.chg.textContent = fmtPct(shown);
+    row.chg.className = "c-chg " + dirClass(shown);
+    if (VIEWS[state.view].decomp) paintDecomp(row, d);
 
     if (changed) {
       const cls = live.price > prev ? "tick-up" : "tick-down";
@@ -317,122 +378,155 @@
     }
   }
 
-  function renderScoreCell(row, item) {
-    if (state.view === "reco" && item) {
-      const tags = (item.tags || []).map((t) => {
-        const warn = t === "과열" || t === "급등후" ? " warn" : "";
-        return `<span class="tag${warn}">${escapeHtml(t)}</span>`;
-      }).join("");
-      row.score.innerHTML = `
-        <span class="score-line">
-          <span class="score-num">${Number(item.score).toFixed(1)}</span>
-          <span class="gauge"><i style="width:${Math.max(4, Math.min(100, item.score))}%"></i></span>
-          <span class="tags">${tags}</span>
-        </span>`;
+  // 분해 셀은 한 번만 조립하고 이후엔 텍스트/폭만 갱신한다.
+  // 매 틱 innerHTML을 다시 쓰면 느릴 뿐 아니라, 가격과 분해 숫자가 서로 다른
+  // 시점의 값이 되어 '업비트 = 글로벌 + 국내' 항등식이 화면에서 깨져 보인다.
+  function buildScoreCell(row) {
+    row.score.innerHTML = `
+      <span class="score-line">
+        <span class="dbar"><i class="axis"></i><i class="sg"></i><i class="sk"></i></span>
+        <span class="dnums">
+          <b class="c-g"></b><span class="plus">+</span><b class="c-k"></b>
+        </span>
+        <span class="tag verdict"></span>
+      </span>`;
+    row.segG = row.score.querySelector(".sg");
+    row.segK = row.score.querySelector(".sk");
+    row.numG = row.score.querySelector(".c-g");
+    row.numK = row.score.querySelector(".c-k");
+    row.verdictEl = row.score.querySelector(".verdict");
+    row.built = "decomp";
+  }
+
+  function paintDecomp(row, d) {
+    if (!d) {
+      row.score.innerHTML =
+        `<span class="live-note">글로벌 대응 종목 없음 (바이낸스 미상장)</span>`;
+      row.built = "none";
+      return;
+    }
+    if (row.built !== "decomp") buildScoreCell(row);
+
+    const scale = state.barScale || 2;
+    const pos = (v) => Math.max(0, Math.min(100, 50 + (v / scale) * 50));
+    const gEnd = pos(d.global), tEnd = pos(d.up);
+    const place = (el, a, b) => {
+      const l = Math.min(a, b);
+      el.style.left = l + "%";
+      el.style.width = Math.max(0, Math.max(a, b) - l) + "%";
+    };
+    place(row.segG, 50, gEnd);
+    place(row.segK, gEnd, tEnd);
+
+    row.numG.textContent = fmtPp(d.global);
+    row.numK.textContent = fmtPp(d.korea);
+    const v = verdict(d);
+    row.verdictEl.textContent = v.text;
+    row.verdictEl.className = "tag verdict " + v.kind;
+  }
+
+  function renderScoreCell(row) {
+    if (VIEWS[state.view].decomp) {
+      paintDecomp(row, decompose(row.market));
     } else {
       const live = state.live.get(row.market) || {};
       row.score.innerHTML =
         `<span class="live-note">24H 거래대금 <b>${fmtTurnover(live.turnover)}</b></span>`;
+      row.built = "turnover";
     }
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-
-  // ── 목록 산출 ───────────────────────────────────────────
+  // ── 목록 ────────────────────────────────────────────────
   function currentList() {
-    if (state.view === "reco") {
-      const items = (state.board && state.board.items) || [];
-      return items.map((it) => ({ market: it.market, item: it }));
+    const view = state.view;
+    if (view === "korea" || view === "global") {
+      const arr = [];
+      for (const mk of state.base.keys()) {
+        const d = decompose(mk);
+        if (!d) continue;
+        const live = state.live.get(mk);
+        if (!live || live.turnover < MIN_TURNOVER_SUB) continue;
+        arr.push({ mk, d });
+      }
+      // |국내| 절대값으로만 줄세우면 글로벌이 더 크게 움직인 종목이 '국내 단독'
+      // 1위로 올라온다. 우세도(한쪽이 다른 쪽보다 얼마나 큰가)로 정렬해야 한다.
+      const dom = (d) => Math.abs(d.korea) - Math.abs(d.global);
+      if (view === "korea") arr.sort((a, b) => dom(b.d) - dom(a.d));
+      else arr.sort((a, b) => dom(a.d) - dom(b.d));
+      return arr.slice(0, TOP_ROWS).map((x) => x.mk);
     }
     const arr = state.subscribed
       .map((mk) => ({ mk, l: state.live.get(mk) }))
       .filter((x) => x.l);
-
-    if (state.view === "gainers") arr.sort((a, b) => b.l.chg - a.l.chg);
+    if (view === "gainers") arr.sort((a, b) => b.l.chg - a.l.chg);
     else arr.sort((a, b) => b.l.turnover - a.l.turnover);
-
-    return arr.slice(0, TOP_ROWS).map((x) => ({ market: x.mk, item: null }));
+    return arr.slice(0, TOP_ROWS).map((x) => x.mk);
   }
 
   function renderRows(full) {
     const list = currentList();
     const container = $("rows");
-
     if (!list.length) {
       container.innerHTML = `<div class="skeleton">표시할 데이터가 없습니다</div>`;
+      state.rows.clear();
       return;
     }
     const sk = container.querySelector(".skeleton");
     if (sk) sk.remove();
 
-    const seen = new Set();
-    list.forEach((entry, i) => {
-      const mk = entry.market;
-      seen.add(mk);
-      let row = state.rows.get(mk);
-      if (!row) row = createRow(mk);
+    // 막대 공통 스케일 — 행끼리 크기를 비교할 수 있어야 한다
+    let scale = 2;
+    if (VIEWS[state.view].decomp) {
+      for (const mk of list) {
+        const d = decompose(mk);
+        if (d) scale = Math.max(scale, Math.abs(d.up), Math.abs(d.global));
+      }
+      scale = Math.ceil(scale * 1.1);
+    }
+    state.barScale = scale;
 
-      // 순서가 바뀌었을 때만 DOM을 움직인다
+    const seen = new Set();
+    list.forEach((mk, i) => {
+      seen.add(mk);
+      let row = state.rows.get(mk) || createRow(mk);
       if (container.children[i] !== row.el) {
         container.insertBefore(row.el, container.children[i] || null);
       }
-
       row.rank.textContent = i + 1;
-      const nm = (entry.item && entry.item.name) || state.names[mk] || mk.split("-")[1];
-      const caution = entry.item && entry.item.caution;
-      row.ko.innerHTML = escapeHtml(nm) +
-        (caution ? `<span class="badge-caution">유의</span>` : "");
+      row.ko.textContent = state.names[mk] || mk.split("-")[1];
       row.sym.textContent = mk.split("-")[1] + " / KRW";
 
       const live = state.live.get(mk);
-      if (live) {
-        if (full || row.lastPrice == null) {
-          setFlaps(row.price, fmtPrice(live.price), false);
-          row.lastPrice = live.price;
-          row.price.classList.toggle("up", live.chg > 0);
-          row.price.classList.toggle("down", live.chg < 0);
-          row.chg.textContent = fmtPct(live.chg);
-          row.chg.className = "c-chg " + dirClass(live.chg);
-        }
-      } else if (entry.item) {
-        setFlaps(row.price, fmtPrice(entry.item.price), false);
-        row.chg.textContent = fmtPct(entry.item.chg24);
-        row.chg.className = "c-chg " + dirClass(entry.item.chg24);
+      if (live && (full || row.lastPrice == null)) {
+        setFlaps(row.price, fmtPrice(live.price), false);
+        row.lastPrice = live.price;
       }
-
-      renderScoreCell(row, entry.item);
+      if (live) {
+        const d = VIEWS[state.view].decomp ? decompose(mk) : null;
+        const shown = d ? d.up : live.chg;
+        row.price.classList.toggle("up", shown > 0);
+        row.price.classList.toggle("down", shown < 0);
+        row.chg.textContent = fmtPct(shown);
+        row.chg.className = "c-chg " + dirClass(shown);
+      }
+      renderScoreCell(row);
     });
 
-    // 목록에서 빠진 행 정리
     for (const [mk, row] of state.rows) {
-      if (!seen.has(mk)) {
-        row.el.remove();
-        state.rows.delete(mk);
-      }
+      if (!seen.has(mk)) { row.el.remove(); state.rows.delete(mk); }
     }
   }
 
   // ── 마퀴 ────────────────────────────────────────────────
-  function marqueeItem(mk) {
-    const el = document.createElement("span");
-    el.className = "mq-item";
-    el.innerHTML = `<span class="mq-sym"></span><span class="mq-price"></span><span class="mq-chg"></span>`;
-    el.dataset.market = mk;
-    return el;
-  }
-
-  function fillMarquee(trackId, markets, withScore) {
+  function fillMarquee(trackId, markets) {
     const track = $(trackId);
     track.textContent = "";
-    // 이어붙여 무한 스크롤을 만들기 위해 같은 내용을 두 벌 넣는다 (-50% 이동)
     for (let pass = 0; pass < 2; pass++) {
-      for (const m of markets) {
-        const mk = typeof m === "string" ? m : m.market;
-        const el = marqueeItem(mk);
-        if (withScore && typeof m !== "string") el.dataset.score = m.score;
+      for (const mk of markets) {
+        const el = document.createElement("span");
+        el.className = "mq-item";
+        el.dataset.market = mk;
+        el.innerHTML = `<span class="mq-sym"></span><span class="mq-price"></span><span class="mq-chg"></span>`;
         track.appendChild(el);
       }
     }
@@ -440,41 +534,47 @@
   }
 
   function paintMarquee(trackId) {
-    const track = $(trackId);
-    for (const el of track.children) {
+    for (const el of $(trackId).children) {
       const mk = el.dataset.market;
       const live = state.live.get(mk);
       const sym = mk.split("-")[1];
       const name = state.names[mk];
       el.querySelector(".mq-sym").textContent = name ? `${name}(${sym})` : sym;
-      if (live) {
-        el.querySelector(".mq-price").textContent = fmtPrice(live.price);
-        el.querySelector(".mq-chg").textContent =
-          el.dataset.score ? `★${el.dataset.score}` : fmtPct(live.chg);
-        el.className = "mq-item " + dirClass(live.chg);
+      if (!live) continue;
+      el.querySelector(".mq-price").textContent = fmtPrice(live.price);
+      const d = decompose(mk);
+      if (d) {
+        el.querySelector(".mq-chg").textContent = `국내 ${fmtPp(d.korea)}`;
+        el.className = "mq-item " + dirClass(d.korea);
       } else {
-        el.querySelector(".mq-price").textContent = "-";
-        el.querySelector(".mq-chg").textContent = el.dataset.score ? `★${el.dataset.score}` : "";
+        el.querySelector(".mq-chg").textContent = fmtPct(live.chg);
+        el.className = "mq-item " + dirClass(live.chg);
       }
     }
   }
 
-  function renderTopMarquee() {
-    fillMarquee("track-top", state.subscribed.slice(0, MARQUEE_COUNT), false);
-  }
+  const renderTopMarquee = () => fillMarquee("track-top", state.subscribed.slice(0, MARQUEE_COUNT));
 
   function renderWatchMarquee() {
-    const w = (state.board && state.board.watch) || [];
-    if (!w.length) return;
-    fillMarquee("track-bottom", w, true);
+    // 국내 성분이 글로벌보다 우세한 종목들을 하단에 흘린다
+    const arr = [];
+    for (const mk of state.base.keys()) {
+      const d = decompose(mk);
+      if (d) arr.push({ mk, k: Math.abs(d.korea) - Math.abs(d.global) });
+    }
+    arr.sort((a, b) => b.k - a.k);
+    if (arr.length) fillMarquee("track-bottom", arr.slice(0, 14).map((x) => x.mk));
   }
 
   // ── 탭 ──────────────────────────────────────────────────
   function switchView(view) {
     state.view = view;
     for (const b of $("tabs").children) b.classList.toggle("is-on", b.dataset.view === view);
-
-    // 뷰가 바뀌면 행을 전부 버리고 다시 만든다 (컬럼 의미가 달라진다)
+    $("view-title").textContent = VIEWS[view].title;
+    $("explain").style.display = VIEWS[view].decomp ? "" : "none";
+    $("col-head").querySelector(".c-score").textContent =
+      VIEWS[view].decomp ? "글로벌 / 국내 분해" : "거래대금";
+    $("col-head").querySelector(".c-chg").textContent = VIEWS[view].decomp ? "4H" : "24H";
     $("rows").textContent = "";
     state.rows.clear();
     state.lastResort = Date.now();
@@ -486,12 +586,8 @@
     if (b) switchView(b.dataset.view);
   });
 
-  // 탭 전환·백그라운드 복귀 시 재연결
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && (!ws || ws.readyState > 1)) {
-      retry = 0;
-      connect();
-    }
+    if (!document.hidden && (!ws || ws.readyState > 1)) { retry = 0; connect(); }
   });
 
   // ── 부팅 ────────────────────────────────────────────────
@@ -499,15 +595,18 @@
     tickClock();
     setInterval(tickClock, 1000);
 
-    await loadBoard();          // 이름 맵 + 추천 목록
-    const ok = await loadSnapshot();  // 업비트 REST 1회
+    await loadBoard();
+    const ok = await loadSnapshot();
     if (!ok) setConn("down", "시세 연결 실패");
 
+    await loadGlobal();
     renderTopMarquee();
+    renderWatchMarquee();
     renderRows(true);
     connect();
 
     setInterval(loadBoard, BOARD_REFRESH_MS);
+    setInterval(loadGlobal, BINANCE_REFRESH_MS);
     setInterval(() => {
       paintMarquee("track-top");
       paintMarquee("track-bottom");

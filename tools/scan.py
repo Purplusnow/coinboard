@@ -17,6 +17,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone, timedelta
 
@@ -221,6 +222,10 @@ def build_features(market: str, candles: list[dict]) -> dict | None:
     return {
         "market": market,
         "price": last,
+        # 크로스 거래소 분해용 기준가. 바이낸스와 '같은 창'으로 맞춰야 해서
+        # 업비트 signed_change_rate(전일종가 대비)는 쓸 수 없다.
+        "px_4h": closes[-5] if len(closes) >= 5 else None,
+        "px_24h": closes[-25] if len(closes) >= 25 else None,
         "ret_1h": r1,
         "ret_4h": r4,
         "ret_24h": r24,
@@ -274,6 +279,118 @@ def score_universe(feats: list[dict]) -> None:
         f["score"] = round(raw * 100, 1)
         f["parts"] = {k: round(v * 100) for k, v in parts.items()}
         f["penalty"] = penalty
+
+
+# ============================================================================
+# 크로스 거래소 분해 — 이 사이트의 유일한 차별점
+# ============================================================================
+BINANCE = "https://api.binance.com/api/v3"
+MAX_SANE_KIMP = 5.0   # |김프|가 이보다 크면 티커만 같고 다른 토큰이다 (예: DATA)
+
+
+def fetch_binance(path: str):
+    req = urllib.request.Request(f"{BINANCE}{path}", headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def cross_exchange(feats: list[dict], fx: dict) -> dict:
+    """업비트 수익률을 '글로벌 성분 + 국내 성분'으로 분해한다.
+
+        업비트 원화 수익률 ≈ (1+바이낸스 USDT 수익률)(1+USDT/원 수익률) − 1  +  국내 성분
+
+    국내 성분은 곧 프리미엄의 변화량이다. 예측력은 없다(검정으로 기각됨).
+    다만 '지금 이 상승이 글로벌 동반인지 국내 단독인지'라는 사실은
+    두 거래소를 동시에 봐야만 나오고, 어느 거래소 앱에도 없다.
+    """
+    try:
+        info = fetch_binance("/exchangeInfo?permissions=SPOT")
+    except Exception as e:
+        print(f"    ! 바이낸스 조회 실패, 분해 생략: {e}", file=sys.stderr)
+        return {}
+    bi_syms = {x["baseAsset"] for x in info["symbols"]
+               if x["quoteAsset"] == "USDT" and x["status"] == "TRADING"}
+
+    pairs = [(f, f["market"].split("-")[1]) for f in feats]
+    pairs = [(f, s) for f, s in pairs if s != "USDT" and s in bi_syms]
+    if not pairs:
+        return {}
+    symbols = [s + "USDT" for _, s in pairs]
+
+    def windowed(size: str) -> dict:
+        out = {}
+        for i in range(0, len(symbols), 100):     # 심볼당 weight가 붙어 나눠 호출
+            chunk = symbols[i:i + 100]
+            q = urllib.parse.quote(json.dumps(chunk, separators=(",", ":")))
+            for x in fetch_binance(f"/ticker?symbols={q}&windowSize={size}"):
+                out[x["symbol"]] = {
+                    "chg": float(x["priceChangePercent"]),
+                    "last": float(x["lastPrice"]),
+                }
+            time.sleep(0.3)
+        return out
+
+    try:
+        w4, w24 = windowed("4h"), windowed("1d")
+    except Exception as e:
+        print(f"    ! 바이낸스 윈도우 조회 실패: {e}", file=sys.stderr)
+        return {}
+
+    # 환율 수익률도 같은 창으로
+    fx_now, fx_4h, fx_24h = fx.get("now"), fx.get("h4"), fx.get("h24")
+    r_fx_4 = (fx_now / fx_4h - 1) * 100 if fx_now and fx_4h else 0.0
+    r_fx_24 = (fx_now / fx_24h - 1) * 100 if fx_now and fx_24h else 0.0
+
+    out, unmatched = {}, 0
+    for f, sym in pairs:
+        b4, b24 = w4.get(sym + "USDT"), w24.get(sym + "USDT")
+        if not b4 or not fx_now:
+            continue
+        kimp = (f["price"] / (b4["last"] * fx_now) - 1) * 100
+        if abs(kimp) > MAX_SANE_KIMP:      # 티커 충돌 방어
+            unmatched += 1
+            continue
+
+        rec = {"kimp": round(kimp, 2), "binance": sym}
+        for label, upx, bwin, rfx in (("4h", f.get("px_4h"), b4, r_fx_4),
+                                      ("24h", f.get("px_24h"), b24, r_fx_24)):
+            if not upx or not bwin:
+                continue
+            r_up = (f["price"] / upx - 1) * 100
+            r_glob = ((1 + bwin["chg"] / 100) * (1 + rfx / 100) - 1) * 100
+            rec[label] = {
+                "up": round(r_up, 2),
+                "global": round(r_glob, 2),
+                "korea": round(r_up - r_glob, 2),
+            }
+        out[f["market"]] = rec
+
+    print(f"    분해 {len(out)}종목 (티커충돌 제외 {unmatched}개, "
+          f"환율 4h {r_fx_4:+.2f}% / 24h {r_fx_24:+.2f}%)", file=sys.stderr)
+    return out
+
+
+def classify(rec: dict, window: str = "4h") -> tuple[str, str] | None:
+    """분해 결과를 사람이 읽는 한 줄로. 예측이 아니라 서술이다."""
+    d = rec.get(window)
+    if not d:
+        return None
+    up, g, k = d["up"], d["global"], d["korea"]
+    if abs(up) < 0.7:
+        return ("보합", "flat")
+    if up > 0:
+        if k > 0 and g <= 0.3:
+            return ("국내 단독 상승", "korea")
+        if k > g:
+            return ("국내 주도 상승", "korea")
+        if abs(k) < max(0.5, abs(g) * 0.3):
+            return ("글로벌 동반 상승", "global")
+        return ("글로벌 주도 상승", "global")
+    if k < 0 and g >= -0.3:
+        return ("국내 단독 하락", "korea")
+    if k < g:
+        return ("국내 주도 하락", "korea")
+    return ("글로벌 동반 하락", "global")
 
 
 def _part_label(key: str, f: dict) -> str | None:
@@ -404,6 +521,18 @@ def main() -> int:
               if tmap.get(f["market"], {}).get("acc_trade_price_24h", 0) >= MIN_TURNOVER_RECO]
     print(f"    추천 후보 {len(liquid)}개 (거래대금 {MIN_TURNOVER_RECO/1e8:.0f}억+)", file=sys.stderr)
 
+    # 크로스 거래소 분해 (환율은 업비트 KRW-USDT 봉에서 직접)
+    fx = {}
+    try:
+        fxc = list(reversed(fetch("/candles/minutes/60?market=KRW-USDT&count=25")))
+        fxp = [c["trade_price"] for c in fxc]
+        fx = {"now": fxp[-1],
+              "h4": fxp[-5] if len(fxp) >= 5 else None,
+              "h24": fxp[-25] if len(fxp) >= 25 else None}
+    except Exception as e:
+        print(f"    ! 환율 조회 실패: {e}", file=sys.stderr)
+    cross = cross_exchange(feats, fx) if fx else {}
+
     items = []
     for rank, f in enumerate(liquid[: args.top], start=1):
         mk = f["market"]
@@ -418,6 +547,11 @@ def main() -> int:
             "chg24": round((t.get("signed_change_rate") or 0) * 100, 2),
             "turnover24": t.get("acc_trade_price_24h", 0),
             "caution": meta[mk]["caution"],
+            "px_4h": f.get("px_4h"),
+            "px_24h": f.get("px_24h"),
+            "cross": cross.get(mk),
+            "verdict": (lambda c: (lambda r: {"text": r[0], "kind": r[1]} if r else None)(classify(c))
+                        )(cross[mk]) if mk in cross else None,
             "tags": make_tags(f),
             "parts": f["parts"],
             "metrics": {
@@ -440,6 +574,10 @@ def main() -> int:
         "weights": WEIGHTS,
         "items": items,
         "reco_pool": len(liquid),
+        # 환율과 전 종목 분해 결과. 브라우저가 WS 실시간 가격과 합쳐
+        # 국내/글로벌 성분을 거의 실시간으로 다시 계산할 수 있게 한다.
+        "fx": fx,
+        "cross": cross,
         "watch": [  # 13~24위: 전광판 하단 마퀴에 흘릴 관심 종목
             {"symbol": f["market"].split("-")[1], "name": meta[f["market"]]["name"],
              "score": f["score"], "market": f["market"]}

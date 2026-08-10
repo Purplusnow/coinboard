@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>COIN BOARD — 실시간 추천 전광판</title>
-<meta name="description" content="업비트 실시간 시세를 받아 추천 종목을 전광판으로 표시합니다.">
+<title>COIN BOARD — 국내 vs 글로벌 실시간 분해</title>
+<meta name="description" content="업비트 가격 변동을 글로벌 성분과 국내 성분으로 분해해 실시간으로 보여줍니다.">
 <meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
 </head>
 <body>
 
@@ -17,9 +17,10 @@
   <div class="brand">
     <span class="logo">▚</span>
     <span class="brand-name">COIN<em>BOARD</em></span>
-    <span class="brand-sub">UPBIT KRW · LIVE</span>
+    <span class="brand-sub">UPBIT × BINANCE · LIVE</span>
   </div>
   <div class="status">
+    <a class="nav-link" href="research.html">검증 로그</a>
     <span class="conn" id="conn" data-state="connecting">
       <i class="dot"></i><span id="conn-label">연결 중</span>
     </span>
@@ -27,7 +28,6 @@
   </div>
 </header>
 
-<!-- 상단 실시간 시세 마퀴 -->
 <section class="marquee-wrap" aria-label="실시간 시세">
   <div class="marquee-tag">LIVE</div>
   <div class="marquee" id="marquee-top"><div class="marquee-track" id="track-top"></div></div>
@@ -36,30 +36,42 @@
 <main class="board">
   <div class="board-head">
     <div class="board-title">
-      <h1>추천 종목</h1>
-      <span class="board-meta" id="board-meta">스캔 정보 로딩 중…</span>
+      <h1 id="view-title">국내 단독 움직임</h1>
+      <span class="board-meta" id="board-meta">로딩 중…</span>
     </div>
     <nav class="tabs" id="tabs" role="tablist">
-      <button class="tab is-on" data-view="reco" role="tab">추천 TOP</button>
+      <button class="tab is-on" data-view="korea" role="tab">국내 단독</button>
+      <button class="tab" data-view="global" role="tab">글로벌 동반</button>
       <button class="tab" data-view="gainers" role="tab">실시간 급등</button>
       <button class="tab" data-view="turnover" role="tab">거래대금</button>
     </nav>
   </div>
 
+  <p class="explain" id="explain">
+    업비트의 4시간 변동을 <b class="c-g">글로벌 성분</b>(바이낸스 · 환율 반영)과
+    <b class="c-k">국내 성분</b>(그 차이)으로 나눈 값입니다.
+    같은 <b>+5%</b>라도 글로벌이 함께 오른 것인지 국내에서만 오른 것인지는 완전히 다른 상황이며,
+    이 구분은 두 거래소를 동시에 봐야만 나옵니다.
+  </p>
+
   <div class="col-head" id="col-head">
     <span class="c-rank">#</span>
     <span class="c-name">종목</span>
     <span class="c-price">현재가</span>
-    <span class="c-chg">24H</span>
-    <span class="c-score">스코어 / 근거</span>
+    <span class="c-chg">4H</span>
+    <span class="c-score">글로벌 / 국내 분해</span>
   </div>
 
   <div class="rows" id="rows">
     <div class="skeleton">데이터를 불러오는 중…</div>
   </div>
+
+  <p class="legend">
+    <span class="key"><i class="sw g"></i>글로벌 성분 — 바이낸스에서도 같이 움직인 몫</span>
+    <span class="key"><i class="sw k"></i>국내 성분 — 업비트에서만 추가로 움직인 몫</span>
+  </p>
 </main>
 
-<!-- 하단 관심종목 마퀴 -->
 <section class="marquee-wrap bottom" aria-label="관심 종목">
   <div class="marquee-tag alt">WATCH</div>
   <div class="marquee"><div class="marquee-track" id="track-bottom"></div></div>
@@ -67,10 +79,12 @@
 
 <footer class="foot">
   <p class="disclaimer">
-    본 페이지는 공개 시세 데이터를 기계적으로 가공한 <strong>정보 제공</strong> 화면입니다.
-    투자 자문·권유가 아니며 매매 판단과 그 결과의 책임은 이용자 본인에게 있습니다.
+    이 화면은 <strong>예측이 아니라 서술</strong>입니다. 지금 일어난 변동을 두 거래소 기준으로 분해해
+    보여줄 뿐이며, 앞으로의 방향을 시사하지 않습니다.
+    실제로 국내 성분에 예측력이 있는지 직접 검정했고 <a href="research.html">결과는 기각</a>이었습니다.
+    투자 자문이 아니며 매매 판단과 결과의 책임은 이용자 본인에게 있습니다.
   </p>
-  <p class="src">시세 · 업비트 공개 API / WebSocket &nbsp;·&nbsp; 스코어링 <span id="foot-scan">—</span></p>
+  <p class="src">업비트 공개 API/WebSocket · 바이낸스 공개 API &nbsp;·&nbsp; 스캔 <span id="foot-scan">—</span></p>
 </footer>
 
 <script src="config.js"></script>

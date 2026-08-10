@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>검증 로그 — COIN BOARD</title>
+<meta name="description" content="이 사이트가 시험해보고 버린 신호들의 검정 결과를 그대로 공개합니다.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">▚</span>
+    <span class="brand-name">COIN<em>BOARD</em></span>
+    <span class="brand-sub">검증 로그</span>
+  </div>
+  <div class="status">
+    <a class="nav-link" href="index.html">← 전광판</a>
+  </div>
+</header>
+
+<main class="doc">
+
+<h1>우리가 시험해보고 <em>버린</em> 신호들</h1>
+<p class="lede">
+  대부분의 코인 예측 사이트는 지표를 조합해 점수를 매기고, 그게 맞는지는 검증하지 않습니다.
+  이 사이트는 반대로 갑니다. <strong>검정을 통과하지 못한 신호는 화면에 올리지 않고,
+  무엇을 어떻게 죽였는지 여기에 그대로 적습니다.</strong>
+</p>
+
+<div class="callout">
+  <b>결론부터</b> — 무료 공개 데이터에서 예측 우위를 찾지 못했습니다.
+  세 종류의 신호를 검정했고 전부 기각됐습니다. 그래서 이 사이트는 예측을 하지 않고,
+  <b>지금 일어난 일을 분해해 보여주는 것</b>만 합니다.
+</div>
+
+<h2>검정 방법</h2>
+<ul class="meth">
+  <li><b>정보계수(IC)</b> — 매 시점 종목 간 신호 순위와 이후 수익률 순위의 순위상관. 평균 IC가 실질적 예측력이다. 0.03~0.05면 약하지만 실재, 0.02 미만이면 사실상 없음.</li>
+  <li><b>시장 중립화</b> — 미래 수익률에서 그 시점 전체 평균을 뺀다. 시장이 다 오른 날 모든 신호가 좋아 보이는 착시를 제거한다.</li>
+  <li><b>비중첩 표본</b> — 예측 지평만큼 건너뛰며 표본을 뽑는다. 겹치면 t값이 부풀려진다.</li>
+  <li><b>GAP 검정</b> — 신호 시점과 수익률 시작점 사이를 1시간 비운다. 같은 가격이 신호와 수익률 양쪽에 들어가면 호가 스프레드만으로 가짜 상관이 생긴다.</li>
+</ul>
+<p class="note">데이터: 업비트 KRW 마켓 67종목 · 바이낸스 대응 페어 · 1시간봉 253개(약 10.5일) · 2026-07-26 ~ 2026-08-09</p>
+
+<h2>기각 1 &nbsp;·&nbsp; Δ김치프리미엄</h2>
+<p>가설: 업비트 가격이 바이낸스 대비 벌어지는 중이면 국내 매수가 앞서는 것이고, 이후 되돌린다.</p>
+<table class="tbl">
+  <thead><tr><th>지평</th><th>GAP</th><th>IC</th><th>t</th><th>양수 비율</th></tr></thead>
+  <tbody>
+    <tr><td>1h</td><td>0h</td><td class="bad">-0.1773</td><td>-22.17</td><td>8%</td></tr>
+    <tr class="hl"><td>1h</td><td><b>1h</b></td><td>-0.0025</td><td>-0.32</td><td>46%</td></tr>
+    <tr><td>4h</td><td>0h</td><td class="bad">-0.0882</td><td>-4.79</td><td>29%</td></tr>
+    <tr class="hl"><td>4h</td><td><b>1h</b></td><td>+0.0072</td><td>+0.45</td><td>57%</td></tr>
+  </tbody>
+</table>
+<p class="verdict-line reject">기각 — 1시간만 비우면 IC가 −0.177에서 −0.003으로 사라집니다.
+전량 <b>bid-ask bounce 착시</b>였습니다. 대형주·소형주 양쪽에서 똑같이 사라지는 것도 기계적 편향의 특징입니다.</p>
+
+<h2>기각 2 &nbsp;·&nbsp; 글로벌 테이커 매수비중</h2>
+<p>가설: 바이낸스에서 시장가 매수가 우위인 코인은 이후에도 강하다. (거래량 기반이라 위 편향이 구조적으로 없음)</p>
+<table class="tbl">
+  <thead><tr><th>신호</th><th>지평</th><th>IC</th><th>t</th></tr></thead>
+  <tbody>
+    <tr><td>테이커 매수비중(4h)</td><td>4h</td><td>-0.0058</td><td>-0.32</td></tr>
+    <tr><td>Δ테이커 매수비중</td><td>4h</td><td>+0.0041</td><td>+0.21</td></tr>
+    <tr><td>테이커 매수비중(4h)</td><td>12h</td><td>+0.0025</td><td>+0.09</td></tr>
+  </tbody>
+</table>
+<p class="verdict-line reject">기각 — 편향은 없지만 신호도 없습니다. IC가 0에서 구분되지 않습니다.</p>
+
+<h2>기각 3 &nbsp;·&nbsp; 국내 거래비중</h2>
+<p>가설: 글로벌 거래대금 대비 업비트 비중이 높은 코인은 국내 쏠림이 심해 이후 언더퍼폼한다.
+GAP 검정은 통과했습니다(IC −0.0725 → −0.0655). 그런데 두 가지가 걸렸습니다.</p>
+<table class="tbl">
+  <thead><tr><th>검정</th><th>결과</th><th>해석</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>순위 자기상관</td>
+      <td>lag 24h <b>0.783</b> · lag 120h <b>0.747</b></td>
+      <td>랭킹이 거의 안 바뀜 → 56개 표본이 실질적으로 2~3개</td>
+    </tr>
+    <tr class="hl">
+      <td>대안 설명</td>
+      <td>국내비중 IC −0.0655 vs <b>업비트 거래대금만 −0.0615</b></td>
+      <td>두 거래소를 비교해 얻은 것이 없음</td>
+    </tr>
+  </tbody>
+</table>
+<p class="verdict-line reject">기각 — 업비트 거래대금 하나로 같은 결과가 나옵니다.
+즉 이미 알려진 <b>관심도(attention) 이상현상</b>이고 크로스 거래소 데이터의 기여가 없습니다.
+게다가 신호 랭킹이 고정에 가까워 통계적 근거도 t값이 시사하는 것보다 훨씬 약합니다.</p>
+
+<h2>그래서 이 사이트가 하는 일</h2>
+<p>
+  예측을 포기했습니다. 대신 <b>서술</b>만 합니다 — 업비트의 변동을 글로벌 성분과 국내 성분으로 나눠
+  보여줍니다. 이건 검정이 필요한 주장이 아니라 정의상 성립하는 분해이고, 실제로 항등식이 오차 없이 맞습니다.
+</p>
+<p class="fml">
+  업비트 원화 수익률 &nbsp;=&nbsp; <span class="c-g">(1 + 바이낸스 USDT 수익률)(1 + USDT/원 수익률) − 1</span>
+  &nbsp;+&nbsp; <span class="c-k">국내 성분</span>
+</p>
+<p>
+  업비트 앱에서 <b>+0.89%</b>로만 보이는 코인이, 실제로는 글로벌에서 <b>−0.38%</b> 하락 중인데
+  국내에서만 <b>+1.27%p</b> 밀어올린 것일 수 있습니다. 이 구분은 두 거래소를 동시에 봐야 나오고,
+  어느 거래소 앱에도 없습니다. <b>다만 그래서 앞으로 오를지 내릴지는 우리도 모릅니다</b> —
+  위에서 보시다시피 직접 검정해서 기각당했습니다.
+</p>
+
+<h2>한계</h2>
+<ul class="meth">
+  <li>검정 기간이 <b>10.5일</b>로 짧고 단일 국면입니다. 더 긴 기간에서 결과가 달라질 수 있습니다.</li>
+  <li>기각은 "이 신호가 절대 안 통한다"가 아니라 "이 데이터·이 기간·이 방식으로는 근거를 못 찾았다"입니다.</li>
+  <li>분해에 쓰는 USDT/원 환율은 업비트 KRW-USDT 체결가이며, 호가 단위(1원 ≈ 0.07%)만큼 잡음이 섞입니다.</li>
+  <li>업비트와 바이낸스에 티커가 같아도 다른 토큰인 경우가 있어(예: DATA) |김프| 5% 초과 종목은 분해에서 제외합니다.</li>
+</ul>
+
+</main>
+
+<footer class="foot">
+  <p class="disclaimer">
+    정보 제공 목적의 화면이며 투자 자문·권유가 아닙니다. 매매 판단과 결과의 책임은 이용자 본인에게 있습니다.
+  </p>
+</footer>
+
+</body>
+</html>
