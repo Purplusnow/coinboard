@@ -231,6 +231,7 @@
         .filter((t) => (t.acc_trade_price_24h || 0) >= MIN_TURNOVER_SUB)
         .sort((a, b) => b.acc_trade_price_24h - a.acc_trade_price_24h)
         .map((t) => t.market);
+      subscribe();   // 이미 붙어 있으면 넓어진 목록으로 교체
       return true;
     } catch (e) {
       console.warn("스냅샷 실패:", e.message);
@@ -301,6 +302,17 @@
   // ── WebSocket ───────────────────────────────────────────
   let ws = null, retry = 0, pingTimer = null;
 
+  // 구독 목록은 나중에 REST 스냅샷이 오면 넓어질 수 있다. 같은 연결에
+  // 구독 메시지를 다시 보내면 교체되므로 재연결이 필요 없다.
+  function subscribe() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !state.subscribed.length) return;
+    ws.send(JSON.stringify([
+      { ticket: "coinboard-" + Math.random().toString(36).slice(2, 8) },
+      { type: "ticker", codes: state.subscribed },
+      { format: "DEFAULT" },
+    ]));
+  }
+
   function connect() {
     if (!state.subscribed.length) return;
     setConn("connecting", "연결 중");
@@ -310,11 +322,7 @@
     ws.onopen = () => {
       retry = 0;
       setConn("live", "LIVE");
-      ws.send(JSON.stringify([
-        { ticket: "coinboard-" + Math.random().toString(36).slice(2, 8) },
-        { type: "ticker", codes: state.subscribed },
-        { format: "DEFAULT" },
-      ]));
+      subscribe();
       clearInterval(pingTimer);
       pingTimer = setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) ws.send("PING");
@@ -773,8 +781,15 @@
     setInterval(tickClock, 1000);
 
     await loadBoard();
+
+    // WS를 REST보다 먼저 연다. 업비트는 Origin 단위 쿼터가 있어서 /ticker/all을
+    // 부른 직후 핸드셰이크를 열면 429가 난다(배포 환경에서 실측). 구독 목록은
+    // board.json의 유니버스로 충분하고, 스냅샷이 오면 subscribe()로 넓힌다.
+    if (state.base.size) state.subscribed = [...state.base.keys()];
+    connect();
+
     const ok = await loadSnapshot();
-    if (!ok) setConn("down", "시세 연결 실패");
+    if (!ok && !state.subscribed.length) setConn("down", "시세 연결 실패");
 
     await loadBinanceSymbols();
     await loadGlobal();
@@ -784,7 +799,6 @@
     renderTopMarquee();
     renderWatchMarquee();
     renderRows(true);
-    connect();
 
     setInterval(loadBoard, BOARD_REFRESH_MS);
     setInterval(loadGlobal, BINANCE_REFRESH_MS);
