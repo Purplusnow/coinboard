@@ -33,6 +33,7 @@
   const VIEWS = {
     korea:    { title: "국내 단독 움직임", decomp: true },
     global:   { title: "글로벌 동반 움직임", decomp: true },
+    lowvol:   { title: "저변동성", decomp: false, vol: true },
     gainers:  { title: "실시간 급등", decomp: false },
     turnover: { title: "거래대금 상위", decomp: false },
   };
@@ -40,6 +41,8 @@
   const state = {
     board: null,
     names: {},
+    vol30: {},           // market -> { vol, pctile }
+    evidence: null,      // 화면에 올린 신호의 측정 근거
     base: new Map(),     // market -> { px4h, px24h, binance }
     globalChg: new Map(),// market -> 바이낸스 4h 변동(%)
     fxChg4h: 0,
@@ -140,6 +143,8 @@
       state.board = b;
       if (b.names) state.names = b.names;
 
+      state.vol30 = b.vol30 || {};
+      state.evidence = b.evidence || null;
       if (b.fx && b.fx.now && b.fx.h4) {
         state.fxChg4h = (b.fx.now / b.fx.h4 - 1) * 100;
       }
@@ -154,7 +159,11 @@
       }
       for (const [mk, c] of Object.entries(b.cross || {})) {
         const cur = state.base.get(mk) || {};
-        state.base.set(mk, { ...cur, binance: c.binance });
+        state.base.set(mk, {
+          px4h: c.px4h != null ? c.px4h : cur.px4h,
+          px24h: c.px24h != null ? c.px24h : cur.px24h,
+          binance: c.binance,
+        });
         // 스캔 시점의 글로벌 값을 우선 채워두고, 바이낸스 호출이 오면 덮어쓴다
         if (c["4h"] && !state.globalChg.has(mk)) {
           state.globalChg.set(mk, c["4h"].global);
@@ -428,6 +437,16 @@
   function renderScoreCell(row) {
     if (VIEWS[state.view].decomp) {
       paintDecomp(row, decompose(row.market));
+    } else if (VIEWS[state.view].vol) {
+      const v = state.vol30[row.market];
+      row.score.innerHTML = v
+        ? `<span class="score-line">
+             <span class="gauge"><i style="width:${Math.max(3, v.pctile)}%"></i></span>
+             <span class="live-note">일간 변동성 <b>${v.vol.toFixed(2)}%</b>
+               · 유니버스 하위 <b>${v.pctile}%</b></span>
+           </span>`
+        : `<span class="live-note">변동성 데이터 없음</span>`;
+      row.built = "vol";
     } else {
       const live = state.live.get(row.market) || {};
       row.score.innerHTML =
@@ -454,6 +473,13 @@
       if (view === "korea") arr.sort((a, b) => dom(b.d) - dom(a.d));
       else arr.sort((a, b) => dom(a.d) - dom(b.d));
       return arr.slice(0, TOP_ROWS).map((x) => x.mk);
+    }
+    if (view === "lowvol") {
+      return Object.entries(state.vol30)
+        .filter(([mk]) => (state.live.get(mk) || {}).turnover >= MIN_TURNOVER_SUB)
+        .sort((a, b) => a[1].vol - b[1].vol)
+        .slice(0, TOP_ROWS)
+        .map(([mk]) => mk);
     }
     const arr = state.subscribed
       .map((mk) => ({ mk, l: state.live.get(mk) }))
@@ -566,14 +592,41 @@
     if (arr.length) fillMarquee("track-bottom", arr.slice(0, 14).map((x) => x.mk));
   }
 
+  // 신호를 화면에 올릴 때는 반드시 측정된 근거를 같이 보여준다.
+  // 검정을 통과하지 못한 것은 애초에 올리지 않는다.
+  function renderExplain() {
+    const el = $("explain");
+    if (VIEWS[state.view].decomp) {
+      el.style.display = "";
+      el.innerHTML = `업비트의 4시간 변동을 <b class="c-g">글로벌 성분</b>(바이낸스 · 환율 반영)과
+        <b class="c-k">국내 성분</b>(그 차이)으로 나눈 값입니다.
+        같은 <b>+5%</b>라도 글로벌이 함께 오른 것인지 국내에서만 오른 것인지는 완전히 다른 상황이며,
+        이 구분은 두 거래소를 동시에 봐야만 나옵니다.
+        <span class="ev">이건 예측이 아니라 항등식에 의한 분해입니다.</span>`;
+      return;
+    }
+    if (VIEWS[state.view].vol) {
+      el.style.display = "";
+      const e = state.evidence && state.evidence.vol30;
+      el.innerHTML = `30일 실현변동성이 낮은 순입니다. 팩터 검정에서 <b>유일하게 살아남은 신호</b>입니다.
+        ${e ? `<span class="ev">측정: 7일 지평 IC <b>+${e.ic_7d}</b> (t=${e.t_7d},
+        비중첩 표본 ${e.samples}개, ${e.period}) · 분위 스프레드 <b>+${e.spread_7d}%p</b>/7일
+        vs 왕복비용 ${e.fee}%p · 스테이블코인·최저변동 10%를 빼도 유지.
+        <a href="research.html">검정 상세</a></span>` : ""}`;
+      return;
+    }
+    el.style.display = "none";
+  }
+
   // ── 탭 ──────────────────────────────────────────────────
   function switchView(view) {
     state.view = view;
     for (const b of $("tabs").children) b.classList.toggle("is-on", b.dataset.view === view);
     $("view-title").textContent = VIEWS[view].title;
-    $("explain").style.display = VIEWS[view].decomp ? "" : "none";
+    renderExplain();
     $("col-head").querySelector(".c-score").textContent =
-      VIEWS[view].decomp ? "글로벌 / 국내 분해" : "거래대금";
+      VIEWS[view].decomp ? "글로벌 / 국내 분해"
+      : VIEWS[view].vol ? "30일 실현변동성" : "거래대금";
     $("col-head").querySelector(".c-chg").textContent = VIEWS[view].decomp ? "4H" : "24H";
     $("rows").textContent = "";
     state.rows.clear();
@@ -600,6 +653,7 @@
     if (!ok) setConn("down", "시세 연결 실패");
 
     await loadGlobal();
+    renderExplain();
     renderTopMarquee();
     renderWatchMarquee();
     renderRows(true);

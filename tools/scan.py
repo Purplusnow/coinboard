@@ -351,7 +351,10 @@ def cross_exchange(feats: list[dict], fx: dict) -> dict:
             unmatched += 1
             continue
 
-        rec = {"kimp": round(kimp, 2), "binance": sym}
+        # 기준가를 여기 같이 실어야 브라우저가 '전체 유니버스'를 실시간 재계산할 수 있다.
+        # items(상위 12개)에만 실으면 분해 랭킹이 그 12개 안에서만 뽑힌다.
+        rec = {"kimp": round(kimp, 2), "binance": sym,
+               "px4h": f.get("px_4h"), "px24h": f.get("px_24h")}
         for label, upx, bwin, rfx in (("4h", f.get("px_4h"), b4, r_fx_4),
                                       ("24h", f.get("px_24h"), b24, r_fx_24)):
             if not upx or not bwin:
@@ -521,6 +524,38 @@ def main() -> int:
               if tmap.get(f["market"], {}).get("acc_trade_price_24h", 0) >= MIN_TURNOVER_RECO]
     print(f"    추천 후보 {len(liquid)}개 (거래대금 {MIN_TURNOVER_RECO/1e8:.0f}억+)", file=sys.stderr)
 
+    # 30일 실현변동성 — 팩터 스터디에서 유일하게 살아남은 신호
+    # (1007일 · 910개 비중첩 표본 · 7일 지평 IC +0.118, 전후반 모두 유지)
+    print("[3.5/4] 일봉 수집 (변동성)…", file=sys.stderr)
+    # 스테이블코인은 랭킹 최상단을 늘 독점하는데 정보가 없다.
+    # (팩터 자체는 이들을 빼도 유지된다 — 7d IC +0.118 → +0.115)
+    STABLE = {"USDT", "USDC", "USDE", "RLUSD", "USD1", "DAI", "TUSD", "FDUSD", "BUSD", "PYUSD"}
+    vol30 = {}
+    for f in feats:
+        mk = f["market"]
+        if mk.split("-")[1] in STABLE:
+            continue
+        try:
+            d = fetch(f"/candles/days?market={mk}&count=31")
+            closes = [c["trade_price"] for c in reversed(d)]
+            rets = [math.log(closes[i] / closes[i - 1])
+                    for i in range(1, len(closes)) if closes[i - 1] > 0]
+            if len(rets) >= 20:
+                mean = sum(rets) / len(rets)
+                var = sum((r - mean) ** 2 for r in rets) / len(rets)
+                vol30[mk] = round(math.sqrt(var) * 100, 2)   # 일간 σ(%)
+        except Exception:
+            pass
+        time.sleep(SLEEP)
+    if vol30:
+        ranked = sorted(vol30.values())
+        for mk, v in vol30.items():
+            pctile = sum(1 for x in ranked if x < v) / max(1, len(ranked) - 1)
+            vol30[mk] = {"vol": v, "pctile": round(pctile * 100)}
+        lo = sorted(vol30.items(), key=lambda kv: kv[1]["vol"])[:3]
+        desc = ", ".join("{} {}%".format(meta[m]["name"], v["vol"]) for m, v in lo)
+        print("    변동성 {}종목 · 최저 {}".format(len(vol30), desc), file=sys.stderr)
+
     # 크로스 거래소 분해 (환율은 업비트 KRW-USDT 봉에서 직접)
     fx = {}
     try:
@@ -578,6 +613,16 @@ def main() -> int:
         # 국내/글로벌 성분을 거의 실시간으로 다시 계산할 수 있게 한다.
         "fx": fx,
         "cross": cross,
+        "vol30": vol30,
+        # 화면에 신호를 올릴 때는 측정된 근거를 함께 싣는다
+        "evidence": {
+            "vol30": {
+                "ic_1d": 0.0759, "ic_3d": 0.0866, "ic_7d": 0.1183,
+                "t_7d": 5.73, "spread_7d": 1.00, "fee": 0.20,
+                "samples": 910, "days": 1007,
+                "period": "2023-11-08 ~ 2026-08-10",
+            }
+        },
         "watch": [  # 13~24위: 전광판 하단 마퀴에 흘릴 관심 종목
             {"symbol": f["market"].split("-")[1], "name": meta[f["market"]]["name"],
              "score": f["score"], "market": f["market"]}
