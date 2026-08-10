@@ -609,9 +609,10 @@
       el.style.display = "";
       const e = state.evidence && state.evidence.vol30;
       el.innerHTML = `30일 실현변동성이 낮은 순입니다. 팩터 검정에서 <b>유일하게 살아남은 신호</b>입니다.
-        ${e ? `<span class="ev">측정: 7일 지평 IC <b>+${e.ic_7d}</b> (t=${e.t_7d},
-        비중첩 표본 ${e.samples}개, ${e.period}) · 분위 스프레드 <b>+${e.spread_7d}%p</b>/7일
-        vs 왕복비용 ${e.fee}%p · 스테이블코인·최저변동 10%를 빼도 유지.
+        ${e ? `<span class="ev">측정(${e.basis}): 7일 지평 IC <b>+${e.ic_7d}</b> (t=${e.t_7d},
+        비중첩 표본 ${e.samples_7d}개) · 1일 IC +${e.ic_1d} (t=${e.t_1d}, ${e.samples_1d}개)
+        · ${e.days}일 ${e.symbols}종목, ${e.period}
+        · 분위 스프레드 <b>+${e.spread_7d}%p</b>/7일 vs 왕복비용 ${e.fee}%p.
         <a href="research.html">검정 상세</a></span>` : ""}`;
       return;
     }
