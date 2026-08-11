@@ -766,3 +766,18 @@ body {
   background: var(--txt-dim);
   vertical-align: 1px;
 }
+
+/* 로고 클릭 → 홈 */
+a.brand { text-decoration: none; color: inherit; cursor: pointer; }
+a.brand:hover .brand-name { opacity: .82; }
+
+/* 진행 중인 추천 상태 배지 */
+#pick-tabs { margin: 0 0 12px; flex-wrap: wrap; overflow-x: auto; scrollbar-width: none; }
+#pick-tabs::-webkit-scrollbar { display: none; }
+.tag.st-open   { background: #16283a; color: var(--global); border-color: #1d3a4d; }
+.tag.st-tp     { background: #10301f; color: var(--mint); border-color: #17452c; }
+.tag.st-sl     { background: #2f1418; color: var(--up); border-color: #4a1f26; }
+.tag.st-expire { background: #1f2432; color: var(--txt-dim); border-color: #2b3244; }
+.tag.st-pending{ background: #2a2412; color: var(--amber); border-color: #3d3517; }
+.tag.st-hold   { background: #1a2030; color: var(--txt-dim); border-color: #262f42; }
+.tag.st-closed { background: #1f2432; color: var(--txt-faint); border-color: #2b3244; }

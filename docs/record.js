@@ -33,6 +33,8 @@
       `<tr><td colspan="8" class="note">아직 채점된 회차가 없습니다.</td></tr>`;
     $("tbl-trade").querySelector("tbody").innerHTML =
       `<tr><td colspan="10" class="note">아직 종결된 매매가 없습니다.</td></tr>`;
+    $("tbl-picks").querySelector("tbody").innerHTML =
+      `<tr><td colspan="8" class="note">아직 기록된 추천이 없습니다.</td></tr>`;
   }
 
   function render(s) {
@@ -87,6 +89,7 @@
 
     $("tbl").querySelector("tbody").innerHTML = rows;
     renderTrades(s, order);
+    setupPicks(s);
     $("fee-note").textContent =
       `수익률은 왕복 수수료 ${s.fee}%p를 뺀 순수익 기준입니다. ` +
       `누적은 지평(${H}일)만큼 건너뛴 비중첩 회차만 곱해 계산합니다.`;
@@ -130,6 +133,82 @@
         <td class="note">${t.hours}h</td>
       </tr>`;
     }).join("");
+  }
+
+  // ── 진행 중인 추천 ─────────────────────────────────────
+  // 집계만 공개하고 실제 종목을 숨기면 검증 가능한 기록이 아니다.
+  const OUT_LABEL = { OPEN: "진행 중", TP: "목표가 도달", SL: "손절", EXPIRE: "기간 만료",
+                      PENDING: "채점 대기", HOLD: "보유 중(목표가 없음)", CLOSED: "기간 종료" };
+  let PICKS = [], LIVE = new Map(), curRule = null;
+
+  function renderPicks() {
+    const tb = $("tbl-picks").querySelector("tbody");
+    const rows = PICKS.filter((p) => p.rule === curRule);
+    if (!rows.length) {
+      tb.innerHTML = `<tr><td colspan="8" class="note">이 규칙의 기록이 없습니다.</td></tr>`;
+      return;
+    }
+    tb.innerHTML = rows.slice(0, 60).map((p) => {
+      const cur = LIVE.get(p.m);
+      // 종결된 건은 확정 손익, 진행 중인 건은 현재가 기준 평가손익
+      const pnl = p.net != null ? p.net : (cur ? (cur / p.p - 1) * 100 : null);
+      const open = p.out === "OPEN" || p.out === "HOLD";
+      return `<tr>
+        <td><b>${esc(p.name)}</b> <span class="note">${esc(p.m.split("-")[1])}</span></td>
+        <td class="note">${esc(p.day)}</td>
+        <td>${num(p.p)}</td>
+        <td>${open && cur ? num(cur) : "—"}</td>
+        <td class="${cls(pnl)}">${pnl == null ? "—" : fmt(pnl)}%</td>
+        <td class="good">${p.tp == null ? "—" : num(p.tp)}</td>
+        <td class="bad">${p.sl == null ? "—" : num(p.sl)}</td>
+        <td><span class="tag st-${p.out.toLowerCase()}">${OUT_LABEL[p.out] || p.out}</span></td>
+      </tr>`;
+    }).join("");
+  }
+
+  function num(v) {
+    if (v == null) return "—";
+    return v >= 100 ? Math.round(v).toLocaleString("ko-KR")
+      : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : v.toFixed(6);
+  }
+
+  async function setupPicks(s) {
+    PICKS = s.picks || [];
+    const latest = s.latest_day;
+    $("picks-meta").textContent = latest
+      ? `— ${latest} 기록 · 진행 중 ${s.open_count || 0}건`
+      : "— 아직 없음";
+    if (!PICKS.length) {
+      $("tbl-picks").querySelector("tbody").innerHTML =
+        `<tr><td colspan="8" class="note">아직 기록된 추천이 없습니다.</td></tr>`;
+      return;
+    }
+    const rules = [...new Set(PICKS.map((p) => p.rule))];
+    curRule = rules[0];
+    $("pick-tabs").innerHTML = rules.map((r, i) =>
+      `<button class="tab${i === 0 ? " is-on" : ""}" data-rule="${esc(r)}">${esc(
+        (s.rules[r] && s.rules[r].name) || r)}</button>`).join("");
+    $("pick-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest(".tab");
+      if (!b) return;
+      curRule = b.dataset.rule;
+      for (const x of $("pick-tabs").children) x.classList.toggle("is-on", x === b);
+      renderPicks();
+    });
+    renderPicks();
+
+    // 진행 중인 종목만 현재가를 붙인다 (업비트 REST 1회)
+    const open = [...new Set(PICKS.filter((p) => p.out === "OPEN" || p.out === "HOLD").map((p) => p.m))];
+    if (!open.length) return;
+    try {
+      const res = await fetch(
+        "https://api.upbit.com/v1/ticker?markets=" + open.slice(0, 100).join(","));
+      if (!res.ok) return;
+      for (const t of await res.json()) LIVE.set(t.market, t.trade_price);
+      renderPicks();
+    } catch (e) {
+      console.warn("현재가 조회 실패:", e.message);
+    }
   }
 
   async function boot() {

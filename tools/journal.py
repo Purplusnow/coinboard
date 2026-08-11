@@ -399,10 +399,11 @@ def trade_stats(trades: list[dict]) -> dict:
 # ============================================================================
 # 요약 (사이트용)
 # ============================================================================
-def build_summary(journal_dir: str) -> dict:
+def build_summary(journal_dir: str, board: dict | None = None) -> dict:
     entries = read_jsonl(os.path.join(journal_dir, ENTRIES))
     results = read_jsonl(os.path.join(journal_dir, RESULTS))
     trades = read_jsonl(os.path.join(journal_dir, TRADES))
+    names = (board or {}).get("names") or {}
 
     summary = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -445,6 +446,39 @@ def build_summary(journal_dir: str) -> dict:
             "trade": trade_stats([t for t in trades if t["rule"] == rid]),
         }
 
+    # 실제로 무슨 종목을 추천했는지 화면에 보여주기 위한 목록.
+    # 집계만 공개하고 종목을 숨기면 검증 가능한 기록이라고 할 수 없다.
+    resolved = {(t["day"], t["rule"], t["m"]): t for t in trades}
+    now = datetime.now(timezone.utc)
+    picks = []
+    for e in entries:
+        t0 = _parse(e["ts"])
+        exp = e.get("expire_days", EXPIRE_DAYS)
+        deadline = t0 + timedelta(days=exp)
+        for rid, r in e["rules"].items():
+            # eqw는 전 종목이라 화면에 늘어놓을 의미가 없다. 대표만 남긴다.
+            hold = r["holdings"][:HOLD_N] if rid == "eqw" else r["holdings"]
+            for h in hold:
+                key = (e["day"], rid, h["m"])
+                t = resolved.get(key)
+                has_tp = "tp" in h
+                picks.append({
+                    "day": e["day"], "rule": rid, "m": h["m"],
+                    "name": names.get(h["m"]) or h["m"].split("-")[1],
+                    "p": h["p"],
+                    "tp": h.get("tp"), "sl": h.get("sl"), "sig": h.get("sig"),
+                    "deadline": deadline.isoformat(timespec="seconds"),
+                    # 목표가가 없는 회차(도입 전 기록)는 종결 판정 대상이 아니다
+                    "out": (t["out"] if t else
+                            ("OPEN" if now < deadline else "PENDING")) if has_tp else
+                           ("HOLD" if now < deadline else "CLOSED"),
+                    "net": t["net"] if t else None,
+                })
+    picks.sort(key=lambda x: (x["day"], x["rule"]), reverse=True)
+    summary["picks"] = picks[:600]
+    summary["open_count"] = sum(1 for p in picks if p["out"] == "OPEN")
+    summary["latest_day"] = picks[0]["day"] if picks else None
+
     with open(os.path.join(journal_dir, SUMMARY), "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, separators=(",", ":"))
     return summary
@@ -473,7 +507,7 @@ def main() -> int:
     print("[3/4] 목표가/손절가 채점", file=sys.stderr)
     score_trades(args.dir)
     print("[4/4] 요약 생성", file=sys.stderr)
-    s = build_summary(args.dir)
+    s = build_summary(args.dir, board)
 
     print(f"\n  누적 엔트리 {s['entries']}회 (최초 {s['first_day']})", file=sys.stderr)
     for rid, r in s["rules"].items():
