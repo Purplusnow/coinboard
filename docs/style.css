@@ -9,15 +9,17 @@
   --line: #1e2635;
   --line-soft: #171e2b;
 
-  --txt: #e8edf6;
-  --txt-dim: #8794ab;
-  --txt-faint: #55617a;
+  /* 어두운 배경에서는 명도 대비가 크기보다 가독성을 더 좌우한다.
+     WCAG 대비율 실측 후 조정: faint 2.94 → 6.91, dim 5.96 → 8.63 (본문 기준 4.5) */
+  --txt: #eef2f9;
+  --txt-dim: #a6b3c9;
+  --txt-faint: #93a0b6;
 
   --up: #ff4757;
   --up-glow: rgba(255, 71, 87, .45);
   --down: #3d8bfd;
   --down-glow: rgba(61, 139, 253, .45);
-  --flat: #7c8798;
+  --flat: #96a1b4;
 
   --amber: #ffc23d;
   --amber-glow: rgba(255, 194, 61, .5);
@@ -704,7 +706,7 @@ body {
   margin: 0;
   font-family: var(--mono);
   font-size: 11.5px;
-  color: #3d475c;
+  color: var(--txt-faint);
   letter-spacing: .04em;
 }
 
