@@ -93,7 +93,7 @@ body {
 
 .brand-name {
   font-family: var(--mono);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: .14em;
 }
@@ -105,9 +105,9 @@ body {
 
 .brand-sub {
   font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: .18em;
-  color: var(--txt-faint);
+  font-size: 11.5px;
+  letter-spacing: .16em;
+  color: var(--txt-dim);
   white-space: nowrap;
 }
 
@@ -118,7 +118,7 @@ body {
   align-items: center;
   gap: 7px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: .08em;
   color: var(--txt-dim);
 }
@@ -138,7 +138,7 @@ body {
 
 .clock {
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
   color: var(--txt);
   letter-spacing: .05em;
@@ -200,12 +200,12 @@ body {
   align-items: baseline;
   gap: 7px;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 .mq-sym { color: var(--txt-dim); letter-spacing: .06em; }
 .mq-price { color: var(--txt); }
-.mq-chg { font-size: 11.5px; }
+.mq-chg { font-size: 12.5px; }
 .mq-item.up .mq-chg, .mq-item.up .mq-price { color: var(--up); }
 .mq-item.down .mq-chg, .mq-item.down .mq-price { color: var(--down); }
 .mq-item.flat .mq-chg { color: var(--flat); }
@@ -230,7 +230,7 @@ body {
 
 .board-title h1 {
   margin: 0;
-  font-size: 21px;
+  font-size: 23px;
   font-weight: 800;
   letter-spacing: -.01em;
 }
@@ -238,7 +238,7 @@ body {
   display: block;
   margin-top: 5px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--txt-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -257,9 +257,9 @@ body {
   background: transparent;
   color: var(--txt-dim);
   font-family: var(--sans);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
-  padding: 7px 13px;
+  padding: 8px 14px;
   border-radius: 6px;
   cursor: pointer;
   transition: background .15s, color .15s;
@@ -281,9 +281,9 @@ body {
 }
 
 .col-head {
-  padding: 0 14px 8px;
+  padding: 0 14px 9px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: .16em;
   color: var(--txt-faint);
   border-bottom: 1px solid var(--line);
@@ -333,7 +333,7 @@ body {
 
 .c-rank {
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 700;
   color: var(--txt-faint);
   font-variant-numeric: tabular-nums;
@@ -345,7 +345,7 @@ body {
 .c-name { min-width: 0; }
 .n-ko {
   display: block;
-  font-size: 14.5px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -.01em;
   white-space: nowrap;
@@ -354,11 +354,11 @@ body {
 }
 .n-sym {
   display: block;
-  margin-top: 2px;
+  margin-top: 3px;
   font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: .1em;
-  color: var(--txt-faint);
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  color: var(--txt-dim);
 }
 .badge-caution {
   display: inline-block;
@@ -380,8 +380,8 @@ body {
   align-items: center;
   gap: 1px;
   font-family: var(--mono);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   perspective: 320px;
 }
@@ -407,7 +407,7 @@ body {
 .c-chg {
   text-align: right;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -425,7 +425,7 @@ body {
 }
 .score-num {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--amber);
   font-variant-numeric: tabular-nums;
@@ -455,7 +455,7 @@ body {
   min-width: 0;
 }
 .tag {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 4px;
@@ -470,16 +470,36 @@ body {
 .c-g { color: var(--global); }
 .c-k { color: var(--korea); }
 
+/* 상단 메뉴 — 점선 텍스트는 시인성이 너무 낮아 알약형으로 바꿨다.
+   현재 위치를 항상 표시한다. */
+.nav {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav::-webkit-scrollbar { display: none; }
 .nav-link {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: .06em;
+  padding: 8px 15px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.01em;
   color: var(--txt-dim);
   text-decoration: none;
-  border-bottom: 1px dotted #39445a;
-  padding-bottom: 1px;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
 }
-.nav-link:hover { color: var(--amber); border-color: var(--amber); }
+.nav-link:hover { color: var(--txt); background: var(--panel-2); }
+.nav-link.is-active {
+  color: #07090e;
+  background: var(--amber);
+  box-shadow: 0 0 16px var(--amber-glow);
+}
 
 .explain {
   margin: 0 0 14px;
@@ -488,18 +508,18 @@ body {
   border-left: 2px solid var(--korea);
   border-radius: 7px;
   background: #0e131c;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--txt-dim);
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #b9c4d6;
 }
 .explain b { font-weight: 700; }
 .explain .ev {
   display: block;
-  margin-top: 7px;
-  padding-top: 7px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px dashed #232c3d;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--txt-faint);
 }
 .explain .ev b { color: var(--mint); }
@@ -509,9 +529,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 18px;
-  margin: 12px 2px 0;
-  font-size: 11.5px;
-  color: var(--txt-faint);
+  margin: 14px 2px 0;
+  font-size: 12.5px;
+  color: var(--txt-dim);
 }
 .key { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -541,7 +561,7 @@ body {
   align-items: baseline;
   gap: 3px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -555,7 +575,7 @@ body {
 /* 실시간 뷰에서는 스코어 대신 거래대금 표시 */
 .live-note {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--txt-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -571,8 +591,8 @@ body {
   line-height: 1.75;
 }
 .doc h1 {
-  margin: 0 0 10px;
-  font-size: 25px;
+  margin: 0 0 12px;
+  font-size: 28px;
   letter-spacing: -.02em;
 }
 .doc h1 em { font-style: normal; color: var(--up); }
@@ -580,11 +600,11 @@ body {
   margin: 34px 0 10px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
-  font-size: 16px;
+  font-size: 18.5px;
   letter-spacing: -.01em;
 }
-.doc p { margin: 0 0 12px; font-size: 13.5px; color: #c2cbdb; }
-.lede { font-size: 14.5px !important; color: var(--txt-dim) !important; }
+.doc p { margin: 0 0 13px; font-size: 15px; line-height: 1.8; color: #c8d1e0; }
+.lede { font-size: 16px !important; color: #b3bccd !important; }
 .doc strong, .doc b { color: var(--txt); }
 
 .callout {
@@ -594,32 +614,33 @@ body {
   border-left: 3px solid var(--amber);
   border-radius: 8px;
   background: #17130a;
-  font-size: 13.5px;
-  color: #d8cdb4;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #ded3ba;
 }
 .callout b { color: var(--amber); }
 
 .meth { margin: 0 0 12px; padding-left: 18px; }
-.meth li { margin-bottom: 7px; font-size: 13px; color: #b3bccd; }
+.meth li { margin-bottom: 9px; font-size: 14.5px; line-height: 1.75; color: #b9c4d6; }
 
-.note { font-family: var(--mono); font-size: 11.5px; color: var(--txt-faint) !important; }
+.note { font-family: var(--mono); font-size: 12.5px; color: var(--txt-dim) !important; }
 
 .tbl {
   width: 100%;
   border-collapse: collapse;
   margin: 12px 0 14px;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 .tbl th {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line);
-  color: var(--txt-faint);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: .08em;
+  color: var(--txt-dim);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: .06em;
 }
 .tbl td {
   padding: 8px 10px;
@@ -630,9 +651,9 @@ body {
 .tbl td.bad { color: var(--up); }
 
 .verdict-line {
-  padding: 11px 14px;
+  padding: 13px 16px;
   border-radius: 7px;
-  font-size: 13px !important;
+  font-size: 14.5px !important;
 }
 .doc h2.ok { color: var(--mint); }
 .tbl td.good { color: var(--mint); }
@@ -653,7 +674,7 @@ body {
   border-radius: 8px;
   background: #0d1219;
   font-family: var(--mono);
-  font-size: 12px !important;
+  font-size: 13px !important;
   line-height: 1.9;
   overflow-x: auto;
 }
@@ -673,28 +694,32 @@ body {
   text-align: center;
 }
 .disclaimer {
-  margin: 0 0 8px;
-  font-size: 11.5px;
-  line-height: 1.65;
-  color: var(--txt-faint);
+  margin: 0 0 9px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--txt-dim);
 }
 .disclaimer strong { color: var(--txt-dim); }
 .src {
   margin: 0;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: #3d475c;
   letter-spacing: .04em;
 }
 
 /* ── 모바일 ───────────────────────────────────────────── */
 @media (max-width: 760px) {
-  :root { --row-h: 60px; }
+  :root { --row-h: 62px; }
 
-  .topbar { padding: 11px 14px; }
+  /* 메뉴를 줄바꿈시켜 헤더가 좁아져도 안 잘리게 한다 */
+  .topbar { padding: 10px 12px; flex-wrap: wrap; gap: 9px; }
+  .nav { order: 3; width: 100%; }
+  .nav-link { flex: 1; text-align: center; padding: 9px 8px; font-size: 13.5px; }
   .brand-sub { display: none; }
-  .brand-name { font-size: 16px; }
-  .clock { font-size: 12px; }
+  .brand-name { font-size: 17px; }
+  .clock { font-size: 13px; }
+  .conn { font-size: 11.5px; }
 
   .board { padding: 16px 10px 20px; }
   .board-head { align-items: stretch; }
@@ -711,8 +736,8 @@ body {
 
   /* 스코어 컬럼은 이름 아래로 내린다 */
   .col-head, .row {
-    grid-template-columns: 30px minmax(0, 1fr) 108px 74px;
-    gap: 8px;
+    grid-template-columns: 28px minmax(0, 1fr) 112px 78px;
+    gap: 7px;
   }
   .col-head .c-score { display: none; }
   .c-score {
@@ -721,11 +746,11 @@ body {
     margin-top: 7px;
   }
   .row { padding: 9px 11px; }
-  .c-price { font-size: 14.5px; }
-  .c-chg { font-size: 12.5px; }
-  .n-ko { font-size: 13.5px; }
+  .c-price { font-size: 15.5px; }
+  .c-chg { font-size: 13.5px; }
+  .n-ko { font-size: 15px; }
   .tags { margin-top: 5px; }
-  .tag { font-size: 10px; }
+  .tag { font-size: 11.5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -781,3 +806,12 @@ a.brand:hover .brand-name { opacity: .82; }
 .tag.st-pending{ background: #2a2412; color: var(--amber); border-color: #3d3517; }
 .tag.st-hold   { background: #1a2030; color: var(--txt-dim); border-color: #262f42; }
 .tag.st-closed { background: #1f2432; color: var(--txt-faint); border-color: #2b3244; }
+
+/* 산문인데 .note(고정폭)를 쓰면 한글 가독성이 크게 떨어진다 */
+.subnote {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--txt-dim);
+}
+.subnote b { color: var(--txt); }
