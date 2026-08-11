@@ -13,7 +13,6 @@
   const SUMMARY_URL = OWNER
     ? `https://raw.githubusercontent.com/${OWNER}/${REPO}/journal/summary.json`
     : null;
-  const BRANCH_URL = OWNER ? `https://github.com/${OWNER}/${REPO}/tree/journal` : null;
 
   const H = 7;   // 기본 표시 지평
   const $ = (id) => document.getElementById(id);
@@ -93,10 +92,6 @@
     $("fee-note").textContent =
       `수익률은 왕복 수수료 ${s.fee}%p를 뺀 순수익 기준입니다. ` +
       `누적은 지평(${H}일)만큼 건너뛴 비중첩 회차만 곱해 계산합니다.`;
-    if (BRANCH_URL) {
-      $("raw-link").innerHTML =
-        `원본 장부(수정 불가 기록) · <a href="${BRANCH_URL}">${esc(OWNER)}/${esc(REPO)} @ journal</a>`;
-    }
   }
 
   // 목표가/손절가 매매. 대표 지표는 승률이 아니라 기대값이다 —
