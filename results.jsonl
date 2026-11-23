@@ -1198,3 +1198,15 @@
 {"day":"2026-11-21","rule":"random","h":1,"n":7,"gross":2.0,"net":1.8,"btc":1.965,"vs_btc":-0.165,"missing":["KRW-TRUST","KRW-SNT","KRW-PRL","KRW-PIEVERSE","KRW-PENGU"],"scored_at":"2026-11-22T06:40:22+00:00"}
 {"day":"2026-11-21","rule":"btc","h":1,"n":1,"gross":1.965,"net":1.765,"btc":1.965,"vs_btc":-0.2,"missing":[],"scored_at":"2026-11-22T06:40:22+00:00"}
 {"day":"2026-11-21","rule":"eqw","h":1,"n":75,"gross":1.189,"net":0.989,"btc":1.965,"vs_btc":-0.976,"missing":["KRW-XRP","KRW-SOL","KRW-PIEVERSE","KRW-SUI","KRW-XLM","KRW-PROS","KRW-SOON","KRW-SNT","KRW-WLD","KRW-PONS","KRW-TRUMP","KRW-PROM","KRW-SHIB","KRW-POKT","KRW-SC","KRW-PENGU","KRW-UNI","KRW-TRX","KRW-XPL","KRW-SLX","KRW-STX","KRW-PUFFER","KRW-ZORA","KRW-SENT","KRW-PEPE","KRW-ZKP","KRW-STEEM","KRW-ZKC","KRW-SKR","KRW-TREE","KRW-PRL","KRW-VIRTUAL","KRW-TAO","KRW-WAVES","KRW-SEI","KRW-SAND","KRW-POD","KRW-SANC","KRW-POL","KRW-WCT","KRW-ZRO","KRW-VVV","KRW-UP2","KRW-PYTH","KRW-TRUST","KRW-ZK","KRW-SAHARA","KRW-OPEN","KRW-STRAX","KRW-SYRUP","KRW-RENDER","KRW-PUMP","KRW-PLUME"],"scored_at":"2026-11-22T06:40:22+00:00"}
+{"day":"2026-11-16","rule":"lowvol","h":7,"n":12,"gross":-4.395,"net":-4.595,"btc":-5.012,"vs_btc":0.416,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-16","rule":"gainers","h":7,"n":12,"gross":-8.006,"net":-8.206,"btc":-5.012,"vs_btc":-3.194,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-16","rule":"korea","h":7,"n":12,"gross":-6.019,"net":-6.219,"btc":-5.012,"vs_btc":-1.207,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-16","rule":"random","h":7,"n":12,"gross":-5.787,"net":-5.987,"btc":-5.012,"vs_btc":-0.975,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-16","rule":"btc","h":7,"n":1,"gross":-5.012,"net":-5.212,"btc":-5.012,"vs_btc":-0.2,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-16","rule":"eqw","h":7,"n":72,"gross":-3.258,"net":-3.458,"btc":-5.012,"vs_btc":1.554,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"lowvol","h":1,"n":12,"gross":1.996,"net":1.796,"btc":3.381,"vs_btc":-1.585,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"gainers","h":1,"n":12,"gross":-0.018,"net":-0.218,"btc":3.381,"vs_btc":-3.598,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"korea","h":1,"n":12,"gross":2.261,"net":2.061,"btc":3.381,"vs_btc":-1.319,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"random","h":1,"n":12,"gross":1.83,"net":1.63,"btc":3.381,"vs_btc":-1.75,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"btc","h":1,"n":1,"gross":3.381,"net":3.181,"btc":3.381,"vs_btc":-0.2,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
+{"day":"2026-11-22","rule":"eqw","h":1,"n":84,"gross":1.392,"net":1.192,"btc":3.381,"vs_btc":-2.188,"missing":[],"scored_at":"2026-11-23T07:29:26+00:00"}
